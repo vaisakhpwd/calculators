@@ -299,20 +299,23 @@
         };
 
         // F.W/C Ratio corresponding to Target Mean Strength - Curve 2 (PPC / OPC 43 / PSC)
-        // Corrected as per user feedback: Curve 2 is 5 MPa lower in strength for the same W/C ratio as Curve 1.
-        // Data is accurate to IS 10262:2019 Table 1, Line 2 (by shifting strength points +5MPa)
+        // Curve 2 is 5 MPa lower in strength for the same W/C ratio as Curve 1.
         const FWC_RATIO_TARGET_STRENGTH_PPC_OPC43 = {
-            25: 0.60, // 0.60 F.W/C at 25 MPa (instead of 20 MPa on Curve 1)
+            25: 0.60, 
             30: 0.55,
             35: 0.50,
             40: 0.45,
-            45: 0.40, // 0.40 F.W/C at 45 MPa (instead of 40 MPa on Curve 1)
+            45: 0.40, 
             50: 0.35,
             55: 0.30,
             60: 0.25,
             65: 0.20,
         };
-
+        
+        // Water Reduction Rate based on user's trial data for Superplasticizer
+        // User requested 23% reduction for 1.0% dosage.
+        const SUPERPLASTICIZER_REDUCTION_RATE = 0.23; 
+        const MAX_ADMIXTURE_WATER_REDUCTION = 0.30; // 30% safety cap
 
         // Approximate Water Content (kg/m³) for 25-50mm Slump (Table 4, IS 10262:2019)
         const INITIAL_WATER_CONTENT = {
@@ -368,9 +371,6 @@
 
         /**
          * Interpolates the required FWC Ratio based on the target strength fck_target and cement type.
-         * @param {number} fck_target The calculated target mean strength (fck + 1.65*S).
-         * @param {string} cementType The selected cement type (e.g., 'OPC53', 'PPC').
-         * @returns {object} {ratio: number, curveName: string}
          */
         function getFWCRatioForTargetStrength(fck_target, cementType) {
             let strengthMap = FWC_RATIO_TARGET_STRENGTH_OPC53;
@@ -429,7 +429,11 @@
             const S_fa = parseFloat(document.getElementById('sg_fa').value); 
             const S_ca = parseFloat(document.getElementById('sg_ca').value); 
             const S_admixture = parseFloat(document.getElementById('sg_admixture').value); 
-            const admixturePercent = parseFloat(document.getElementById('admixture_percent').value) / 100; 
+            
+            // Admixture input handling (Dosage as Percentage and Fraction)
+            const admixtureDosagePercent = parseFloat(document.getElementById('admixture_percent').value); // e.g., 1.0
+            const admixtureDosageFraction = admixtureDosagePercent / 100; // e.g., 0.01
+
             const faMoisture = parseFloat(document.getElementById('fa_moisture').value) / 100; 
             const caMoisture = parseFloat(document.getElementById('ca_moisture').value) / 100; 
             const caAbsorption = parseFloat(document.getElementById('ca_absorption').value) / 100; 
@@ -437,6 +441,7 @@
             const aggregateType = document.getElementById('aggregate_type').value; 
             const maxCementLimit = parseFloat(document.getElementById('max_cement_content').value); 
             const cementType = document.getElementById('cement_type').value;
+            const admixtureType = document.getElementById('admixture_type').value;
 
             // Input Validation (Basic)
             if (isNaN(fck) || fck < 10 || isNaN(msa) || isNaN(wCRatioDesign) || isNaN(S_cement) || isNaN(S_fa) || isNaN(S_ca) || isNaN(S_admixture) || wCRatioDesign <= 0 || S_cement <= 0 || S_fa <= 0 || S_ca <= 0 || S_admixture <= 0) {
@@ -531,11 +536,21 @@
             // Admixture Reduction
             let water_reduction_percent = 0;
             let water_content_net = water_content_slump;
-            if (admixturePercent > 0) {
-                 // Assumed reduction: 5% base + 5% per 1% dosage
-                 water_reduction_percent = 0.05 + Math.min(admixturePercent, 2.0) * 0.05; 
+            
+            if (admixtureDosagePercent > 0 && admixtureType === 'Superplasticizer') {
+                 // Use 23% reduction for every 1.0% dosage, as per user's trial data (linear relationship assumed).
+                 let reduction_from_trial = SUPERPLASTICIZER_REDUCTION_RATE * admixtureDosagePercent; 
+                 let reduction_reason = `Based on User Trial Data (${(SUPERPLASTICIZER_REDUCTION_RATE*100).toFixed(0)}% reduction per 1% dosage).`;
+
+                 if (reduction_from_trial > MAX_ADMIXTURE_WATER_REDUCTION) {
+                    water_reduction_percent = MAX_ADMIXTURE_WATER_REDUCTION;
+                    reduction_reason = `Capped at ${MAX_ADMIXTURE_WATER_REDUCTION * 100}% (Max Reduction)`;
+                 } else {
+                    water_reduction_percent = reduction_from_trial;
+                 }
+
                  water_content_net = water_content_slump * (1 - water_reduction_percent);
-                 calcDetails += `<p>Water Reduction (Admixture ${round(admixturePercent*100, 2)}\%): ${round(water_reduction_percent * 100, 2)} \text{ \%}$</p>
+                 calcDetails += `<p>Water Reduction (Admixture ${round(admixtureDosagePercent, 2)}\%): ${round(water_reduction_percent * 100, 2)} \text{ \%}$ (${reduction_reason})</p>
                                  <p>Water Content ($\mathbf{W_{net}}$) after Admixture: <span class="res">${round(water_content_net).toFixed(1)} \text{ kg/m}^3$</span></p>`;
             } else {
                  calcDetails += `<p>Admixture Reduction: $0\%$. $\mathbf{W_{net}} = ${round(water_content_net).toFixed(1)} \text{ kg/m}^3$</p>`;
@@ -569,7 +584,7 @@
                 final_water_content = final_cement_content * wCRatioGoverning;
             }
 
-            const admixture_content = final_cement_content * admixturePercent;
+            const admixture_content = final_cement_content * admixtureDosageFraction; // Use the fraction for mass calculation
 
             calcDetails += `<p>Cement Content Check: ${cement_check_message}</p>
                             <p><strong>Final Cement Content (C):</strong> <span class="res">${round(final_cement_content).toFixed(1)} \text{ kg/m}^3$</span></p>
