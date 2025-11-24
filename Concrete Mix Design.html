@@ -86,6 +86,16 @@
                         <p class="text-xs text-gray-500 mt-1">Affects minimum cement and maximum W/C ratio for durability.</p>
                     </div>
                     
+                    <!-- 1.8. Degree of Site Control -->
+                    <div class="input-group">
+                        <label for="site_control" class="block text-sm text-gray-700 mb-1">Degree of Site Control</label>
+                        <select id="site_control" class="input-field bg-white" onchange="calculateMix()">
+                            <option value="Good" selected>Good</option>
+                            <option value="Fair">Fair</option>
+                        </select>
+                        <p class="text-xs text-gray-500 mt-1">Influences standard deviation ($S$) for target strength. (Currently using conservative $S$).</p>
+                    </div>
+                    
                     <!-- 4. Water-Cement Ratio -->
                     <div class="input-group">
                         <label for="w_c_ratio_input" class="block text-sm text-gray-700 mb-1">Design Water-Cement Ratio (W/C)</label>
@@ -93,6 +103,14 @@
                         <p class="text-xs text-gray-500 mt-1">W/C Ratio chosen for strength calculation ($f'_{ck}$).</p>
                         <!-- Warning Area for W/C Ratio -->
                         <p id="wc_ratio_warning" class="text-xs text-red-600 mt-1 font-semibold hidden"></p>
+                    </div>
+                    
+                    <!-- 4.1. Max Cement Content (Durability/Thermal) -->
+                    <div class="input-group">
+                        <label for="max_cement_content" class="block text-sm text-gray-700 mb-1">Max Cement Content (Exc. Fly Ash/SCMs) (kg/m³)</label>
+                        <input type="number" id="max_cement_content" value="450" min="300" step="10" class="input-field" onchange="calculateMix()">
+                        <p class="text-xs text-gray-500 mt-1">Used as a hard limit (usually 450 kg/m³) to control creep/shrinkage/thermal cracking.</p>
+                        <p id="max_cement_warning" class="text-xs text-red-600 mt-1 font-semibold hidden"></p>
                     </div>
 
                     <!-- 2. Max Nominal Aggregate Size (MSA) -->
@@ -104,6 +122,17 @@
                             <option value="10">10 mm</option>
                         </select>
                         <p class="text-xs text-gray-500 mt-1">Determines initial water content.</p>
+                    </div>
+                    
+                    <!-- 2.1. Type of Coarse Aggregate -->
+                    <div class="input-group">
+                        <label for="aggregate_type" class="block text-sm text-gray-700 mb-1">Type of Aggregate</label>
+                        <select id="aggregate_type" class="input-field bg-white" onchange="calculateMix()">
+                            <option value="CrushedAngular" selected>Crushed Angular Aggregate</option>
+                            <option value="SubAngular">Sub-angular Aggregate</option>
+                            <option value="Rounded">Rounded Aggregate</option>
+                        </select>
+                        <p class="text-xs text-gray-500 mt-1">Affects water demand (up to $\pm$ 20 kg/m³ correction from base table).</p>
                     </div>
 
                     <!-- 2.5. Method of Placing (NEW) -->
@@ -121,6 +150,18 @@
                         <label for="slump" class="block text-sm text-gray-700 mb-1">Required Slump/Workability (mm)</label>
                         <input type="number" id="slump" value="100" min="25" class="input-field" onchange="calculateMix()">
                         <p class="text-xs text-gray-500 mt-1">Typically 75-100 mm for Pumping/Heavy reinforcement.</p>
+                    </div>
+
+                    <!-- 3.1. Chemical Admixture Type -->
+                    <div class="input-group">
+                        <label for="admixture_type" class="block text-sm text-gray-700 mb-1">Chemical Admixture Type</label>
+                        <select id="admixture_type" class="input-field bg-white" onchange="calculateMix()">
+                            <option value="Superplasticizer" selected>Superplasticizer - Normal</option>
+                            <option value="Retarder">Retarding Admixture</option>
+                            <option value="Accelerator">Accelerating Admixture</option>
+                            <option value="None">None</option>
+                        </select>
+                        <p class="text-xs text-gray-500 mt-1">Used primarily to reduce water content for required workability.</p>
                     </div>
 
                     <!-- Specific Gravities -->
@@ -183,11 +224,13 @@
                     </ul>
                     <!-- End Durability Checks -->
 
-                    <h3 class="text-xl font-bold text-gray-800 border-t pt-2 mt-4">Placement/Workability Check</h3>
+                    <h3 class="text-xl font-bold text-gray-800 border-t pt-2 mt-4">Design Checks & Adjustments</h3>
                     <p id="placing_warning" class="text-xs text-orange-600 mt-1 font-semibold hidden bg-orange-100 p-2 rounded"></p>
+                    <p id="cement_max_warning" class="text-xs text-orange-600 mt-1 font-semibold hidden bg-orange-100 p-2 rounded"></p>
                     
-
                     <p id="target-strength-display" class="font-medium text-lg text-green-700 border-t pt-4">Target Strength ($f'_{ck}$): N/A</p>
+                    <p id="water_content_display" class="text-sm text-gray-700">Net Water Content Used: <span id="res_water_net" class="font-mono font-bold text-gray-800">N/A</span> kg/m³</p>
+
 
                     <div id="output-final-mix" class="space-y-2">
                         <h3 class="text-xl font-bold text-gray-800 border-t pt-2 mt-4">Required Quantities (SSD Mass)</h3>
@@ -239,6 +282,13 @@
             '40': 165,
         };
 
+        // Water Content Correction based on Aggregate Type (IS 10262:2019 Clause 4.2.2.1)
+        const AGGREGATE_WATER_CORRECTION = {
+            'Rounded': -25, // For rounded aggregate, reduce water by 25 kg/m³
+            'SubAngular': -10, // For sub-angular aggregate, reduce water by 10 kg/m³
+            'CrushedAngular': 0, // Crushed angular is the base for Table 4 (0 correction)
+        };
+
         // Volume of Coarse Aggregate (CA) per unit volume of total aggregate for different W/C ratios (Table 5, IS 10262:2019)
         // Values for Zone II Fine Aggregate (a common assumption)
         const CA_VOLUME_FRACTION = {
@@ -248,7 +298,6 @@
         };
 
         // Durability Requirements (IS 456:2000, Table 5, Reinforced Concrete, based on Exposure)
-        // Note: This assumes PPC/PSC/OPC for Severe/Very Severe/Extreme for the most conservative limits.
         const IS_456_DURABILITY_LIMITS = {
             'Mild': { min_cement: 300, max_wc: 0.50, min_grade: 20 },
             'Moderate': { min_cement: 310, max_wc: 0.45, min_grade: 25 },
@@ -259,24 +308,6 @@
 
         // Utility function to round to specific decimal places
         const round = (num, dp = 2) => Math.round(num * (10 ** dp)) / (10 ** dp);
-
-        // Utility for exponential backoff (not strictly needed for a single API call, but good practice)
-        async function fetchWithRetry(url, options = {}, retries = 3) {
-            for (let i = 0; i < retries; i++) {
-                try {
-                    const response = await fetch(url, options);
-                    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-                    return response;
-                } catch (error) {
-                    if (i < retries - 1) {
-                        const delay = 2 ** i * 1000 + Math.random() * 1000;
-                        await new Promise(resolve => setTimeout(resolve, delay));
-                    } else {
-                        throw error;
-                    }
-                }
-            }
-        }
 
         function displayError(message) {
             const errorElement = document.getElementById('error-message');
@@ -294,7 +325,7 @@
             // 1. Get Inputs
             const fck = parseInt(document.getElementById('grade').value); // Characteristic Strength (MPa)
             const exposure = document.getElementById('exposure').value; // Exposure Condition (e.g., Severe)
-            // const cementType = document.getElementById('cement_type').value; // Cement Type (e.g., OPC53, PPC)
+            // const cementType = document.getElementById('cement_type').value; // Cement Type
             const msa = parseInt(document.getElementById('msa').value); // Max Nominal Aggregate Size (mm)
             const requiredSlump = parseFloat(document.getElementById('slump').value); // Slump (mm)
             const wCRatioDesign = parseFloat(document.getElementById('w_c_ratio_input').value); // Target W/C Ratio (Design)
@@ -307,7 +338,8 @@
             const caAbsorption = parseFloat(document.getElementById('ca_absorption').value) / 100; // CA Water Absorption
             const faAbsorption = parseFloat(document.getElementById('fa_absorption').value) / 100; // FA Water Absorption
             const placingMethod = document.getElementById('placing_method').value; // Placing Method (Pumpable/Non-Pumpable)
-
+            const aggregateType = document.getElementById('aggregate_type').value; // Type of Aggregate (Crushed Angular, Rounded)
+            const maxCementLimit = parseFloat(document.getElementById('max_cement_content').value); // Max Cement Content Limit
 
             // Input Validation (Basic)
             if (isNaN(fck) || fck < 10 || isNaN(msa) || isNaN(wCRatioDesign) || isNaN(S_cement) || isNaN(S_fa) || isNaN(S_ca) || wCRatioDesign <= 0 || S_cement <= 0 || S_fa <= 0 || S_ca <= 0) {
@@ -319,16 +351,14 @@
 
             // Reset Warnings
             const wcWarningElement = document.getElementById('wc_ratio_warning');
-            wcWarningElement.classList.add('hidden');
-            wcWarningElement.textContent = '';
-            
             const gradeWarningElement = document.getElementById('grade_warning');
-            gradeWarningElement.classList.add('hidden');
-            gradeWarningElement.textContent = '';
-
             const placingWarningElement = document.getElementById('placing_warning');
-            placingWarningElement.classList.add('hidden');
-            placingWarningElement.textContent = '';
+            const maxCementWarningElement = document.getElementById('max_cement_warning');
+
+            [wcWarningElement, gradeWarningElement, placingWarningElement, maxCementWarningElement].forEach(el => {
+                el.classList.add('hidden');
+                el.textContent = '';
+            });
 
 
             // --- DURABILITY CHECK (IS 456, Table 5) ---
@@ -344,8 +374,7 @@
 
             // --- CONCRETE GRADE CODE COMPLIANCE CHECK ---
             if (fck < min_grade_req) {
-                const warningMessage = `Input Grade M${fck} is below the minimum required grade (M${min_grade_req}) for ${exposure} exposure (IS 456, Table 5). Increase concrete grade for durability compliance.`;
-                gradeWarningElement.textContent = warningMessage;
+                gradeWarningElement.textContent = `Input Grade M${fck} is below the minimum required grade (M${min_grade_req}) for ${exposure} exposure (IS 456, Table 5). Increase concrete grade for durability compliance.`;
                 gradeWarningElement.classList.remove('hidden');
             }
 
@@ -360,7 +389,6 @@
                 // Use the code-compliant limit for calculation
                 wCRatioGoverning = max_wc_req;
             } else {
-                // Determine Governing W/C Ratio: lower of Max Req or Design Target 
                 wCRatioGoverning = Math.min(wCRatioDesign, max_wc_req);
             }
             
@@ -376,7 +404,7 @@
                 }
                 
                 if (msa > 20) {
-                    placementWarning += (placementWarning ? ' | ' : '') + `NOTE: For pumping applications, 20 mm MSA is often preferred over 40 mm to reduce the risk of blockages, although 40 mm is technically pumpable with correct mix design and equipment. Current MSA: ${msa} mm.`;
+                    placementWarning += (placementWarning ? ' | ' : '') + `NOTE: For pumping, 20 mm MSA is often preferred over 40 mm to reduce blockages. Current MSA: ${msa} mm.`;
                 }
             }
 
@@ -391,7 +419,6 @@
             // Determine S based on fck (Table 8, IS 456 / IS 10262)
             let S = STANDARD_DEVIATION[fck.toString()];
             if (!S) {
-                // If the grade is not explicitly mapped (e.g., M55 or M60), use the M30+ value (5.0)
                 S = (fck >= 30) ? 5.0 : 4.0; 
                 console.warn(`Standard Deviation (S) for M${fck} is not explicitly defined in map. Using S = ${S} MPa.`);
             }
@@ -400,48 +427,69 @@
             document.getElementById('target-strength-display').textContent = `Target Strength ($f'_{ck}$): ${round(fck_target)} MPa`;
 
             // --- STEP 3: Water Content (for 100mm slump, then adjust) ---
-            let water_content_100mm = INITIAL_WATER_CONTENT[msa.toString()];
-            if (!water_content_100mm) {
+            let water_content_initial = INITIAL_WATER_CONTENT[msa.toString()];
+            if (!water_content_initial) {
                 return displayError(`Initial water content not found for MSA ${msa}mm. Please check IS 10262 Table 4.`);
             }
 
-            // Slump Correction: For every 25mm increase/decrease in slump from the base (100mm for this simple logic),
-            // water content is increased/decreased by about 3%.
-            const slump_base = 100; 
-            const slump_difference = requiredSlump - slump_base;
+            // 3a. Aggregate Type Correction (IS 10262:2019 Table 4 footnote)
+            const agg_correction = AGGREGATE_WATER_CORRECTION[aggregateType] || 0;
+            let water_content_base = water_content_initial + agg_correction;
 
-            // Simplified slump correction (adjusting based on 3% per 25mm)
-            const water_adjustment_factor = 1 + (slump_difference / 25) * 0.03;
-            let water_content = water_content_100mm * water_adjustment_factor;
+            // 3b. Slump Correction: For every 25mm difference from 50mm slump (Base for 20mm MSA is 186 kg/m³ for 50mm slump, then 3% per 25mm)
+            // NOTE: Table 4 in IS 10262 is for 25-50mm slump. We assume the average of 37.5mm is the base or use 50mm as a standard base for simple calculation.
+            // Using 50mm as the base for simplicity.
+            const slump_base_calc = 50; 
+            const slump_difference = requiredSlump - slump_base_calc;
+            const slump_correction_factor = 1 + (slump_difference / 25) * 0.03;
+            
+            let water_content = water_content_base * slump_correction_factor;
+
+            // 3c. Admixture Water Reduction (Assumed 15% reduction for Superplasticizer, for illustration only)
+            // Since we use Admixture %, we assume the W/C ratio chosen already incorporates this.
+            // However, for consistency with IS steps, we show the reduction step here, assuming a typical 15% reduction for 1% admixture use.
+            let water_reduction_percent = admixturePercent > 0 ? 0.15 : 0; // Simple approximation
+            
+            // NOTE: In actual design, the user uses the manufacturer's data (e.g., 20% reduction) to input the W/C ratio.
+            // Here, we calculate water based on the table, and then reduce it based on the admixture dosage.
+            if (admixturePercent > 0) {
+                 water_reduction_percent = 0.05 + Math.min(admixturePercent, 2.0) * 0.05; // 5% + 5% per 1% dosage, max 15%
+                 water_content = water_content * (1 - water_reduction_percent);
+            }
+
 
             // --- STEP 4: Cement Content ---
-            // Cement Content based on Governing W/C ratio (Durability or Strength)
+            
             let cement_content = water_content / wCRatioGoverning;
 
-            // Check if Cement Content meets the Minimum Requirement from IS 456 (Durability)
+            // Check Minimum Cement Requirement (Durability)
             if (cement_content < min_cement_req) {
                 cement_content = min_cement_req;
-                // NOTE: If min cement governs, the actual W/C is lower than the governing W/C ratio, which is acceptable.
             }
+
+            // Check Maximum Cement Requirement (Hard Limit)
+            if (cement_content > maxCementLimit) {
+                maxCementWarningElement.textContent = `WARNING: Calculated Cement Content (${round(cement_content).toFixed(1)} kg/m³) exceeds the specified Maximum Limit (${maxCementLimit} kg/m³). Using Max Limit for calculation.`;
+                maxCementWarningElement.classList.remove('hidden');
+                cement_content = maxCementLimit;
+                // Recalculate water content based on the new cement content and governing W/C ratio
+                water_content = cement_content * wCRatioGoverning;
+            }
+
+            // Display net water content used (after all corrections)
+            document.getElementById('res_water_net').textContent = round(water_content).toFixed(1);
+
 
             // --- STEP 5: Admixture Content (based on cement) ---
             const admixture_content = cement_content * admixturePercent;
 
             // --- STEP 6: Calculate Volume of Concrete Constituents ---
-            // Volume of Cement ($V_c$)
             const V_c = (cement_content / S_cement) * (1 / 1000);
-
-            // Volume of Water ($V_w$)
-            const V_w = (water_content / 1.0) * (1 / 1000); // Specific Gravity of Water = 1.0
-
-            // Volume of Admixture ($V_{ad}$) - Assume SG = 1.1 for liquid admixture
-            const S_admixture = 1.1; // Common assumption for liquid admixture
+            const V_w = (water_content / 1.0) * (1 / 1000); 
+            const S_admixture = 1.1; // Assumed SG for liquid admixture
             const V_ad = (admixture_content / S_admixture) * (1 / 1000);
 
-            // Volume of all materials other than Aggregates ($V_{non\_agg}$)
             const V_non_agg = V_c + V_w + V_ad;
-
-            // Volume of Total Aggregates ($V_{agg}$) for 1m³ concrete
             const V_agg = 1.0 - V_non_agg;
             
             if (V_agg <= 0) {
@@ -450,17 +498,14 @@
 
 
             // --- STEP 7: Determine Volume Fractions of Aggregates ---
-            // Find the appropriate CA volume fraction ($\beta$) based on MSA and W/C ratio
             const CA_FRACTION_MAP = CA_VOLUME_FRACTION[msa.toString()];
             if (!CA_FRACTION_MAP) {
                 return displayError(`CA Volume Fraction data not found for MSA ${msa}mm.`);
             }
             
-            // Interpolate the CA Volume Fraction based on the Governing W/C ratio
             const keys = Object.keys(CA_FRACTION_MAP).map(Number).sort((a, b) => a - b);
-            let Vca_Vt_ratio; // V_ca / V_agg
+            let Vca_Vt_ratio; 
 
-            // The interpolation uses the W/C ratio *used for the mix* (governing W/C)
             if (wCRatioGoverning <= keys[0]) {
                 Vca_Vt_ratio = CA_FRACTION_MAP[keys[0]];
             } else if (wCRatioGoverning >= keys[keys.length - 1]) {
@@ -479,38 +524,20 @@
                 }
             }
 
-            // Volume of Coarse Aggregate (CA)
             const V_ca = V_agg * Vca_Vt_ratio;
-
-            // Volume of Fine Aggregate (FA)
             const V_fa = V_agg - V_ca;
 
             // --- STEP 8: Calculate SSD Masses (kg/m³) ---
-
-            // Mass of Coarse Aggregate (SSD)
             const CA_mass_ssd = V_ca * S_ca * 1000;
-
-            // Mass of Fine Aggregate (SSD)
             const FA_mass_ssd = V_fa * S_fa * 1000;
 
             // --- STEP 9: Moisture Correction (Field Quantities) ---
-
-            // A. Water gained/lost by aggregates (Total Water Adjustment)
-            // FA Adjustment: (Moisture % - Absorption %) * FA Mass (SSD)
             const fa_water_correction = (faMoisture - faAbsorption) * FA_mass_ssd;
-            // CA Adjustment: (Moisture % - Absorption %) * CA Mass (SSD)
             const ca_water_correction = (caMoisture - caAbsorption) * CA_mass_ssd;
-            
             const total_water_correction = fa_water_correction + ca_water_correction;
 
-            // B. Adjusted Water Mass (Actual water to be added at site)
             const water_mass_adjusted = water_content - total_water_correction;
             
-            if (water_mass_adjusted < 0) {
-                 console.warn("Aggregates are excessively wet. Added water is capped at 0 kg/m³.");
-            }
-
-            // C. Wet Aggregate Masses (Field Masses)
             const CA_mass_field = CA_mass_ssd * (1 + caMoisture);
             const FA_mass_field = FA_mass_ssd * (1 + faMoisture);
             
