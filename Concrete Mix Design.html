@@ -339,12 +339,11 @@
             'CrushedAngular': 0, 
         };
 
-        // Volume of Coarse Aggregate (CA) per unit volume of total aggregate for different W/C ratios (Table 5, IS 10262:2019)
-        // Values for Zone II Fine Aggregate (a common assumption)
-        const CA_VOLUME_FRACTION = {
-            '20': { 0.3: 0.66, 0.35: 0.64, 0.4: 0.62, 0.45: 0.60, 0.5: 0.59, 0.55: 0.58, 0.6: 0.57 },
-            '40': { 0.3: 0.75, 0.35: 0.73, 0.4: 0.71, 0.45: 0.69, 0.5: 0.68, 0.55: 0.67, 0.6: 0.66 },
-            '10': { 0.3: 0.53, 0.35: 0.51, 0.4: 0.49, 0.45: 0.47, 0.5: 0.46, 0.55: 0.45, 0.6: 0.44 },
+        // Volume of Coarse Aggregate (CA) per unit volume of total aggregate at W/C=0.5 (Table 5, IS 10262:2019, Zone II Fine Aggregate)
+        const CA_VOLUME_FRACTION_BASE_0_5 = {
+            '20': 0.59, 
+            '40': 0.68, 
+            '10': 0.46,
         };
 
         // Durability Requirements (IS 456:2000, Table 5, Reinforced Concrete, based on Exposure)
@@ -442,6 +441,7 @@
             const maxCementLimit = parseFloat(document.getElementById('max_cement_content').value); 
             const cementType = document.getElementById('cement_type').value;
             const admixtureType = document.getElementById('admixture_type').value;
+            const placingMethod = document.getElementById('placing_method').value;
 
             // Input Validation (Basic)
             if (isNaN(fck) || fck < 10 || isNaN(msa) || isNaN(wCRatioDesign) || isNaN(S_cement) || isNaN(S_fa) || isNaN(S_ca) || isNaN(S_admixture) || wCRatioDesign <= 0 || S_cement <= 0 || S_fa <= 0 || S_ca <= 0 || S_admixture <= 0) {
@@ -450,6 +450,10 @@
             if (!IS_456_DURABILITY_LIMITS[exposure]) {
                 return displayError(`Unknown exposure condition: ${exposure}`);
             }
+             if (!CA_VOLUME_FRACTION_BASE_0_5[msa.toString()]) {
+                return displayError(`Base CA Volume data not found for MSA ${msa}mm. Please check IS 10262 Table 5.`);
+            }
+
 
             // Reset Warnings
             const maxCementWarningElement = document.getElementById('max_cement_warning');
@@ -588,7 +592,7 @@
 
             calcDetails += `<p>Cement Content Check: ${cement_check_message}</p>
                             <p><strong>Final Cement Content (C):</strong> <span class="res">${round(final_cement_content).toFixed(1)} \text{ kg/m}^3$</span></p>
-                            <p><strong>Final Net Water ($\mathbf{W_{net}}$):</strong> ${round(final_cement_content).toFixed(1)} \\times ${wCRatioGoverning.toFixed(3)} = <span class="res">${round(final_water_content).toFixed(1)} \text{ kg/m}^3$</span></p>
+                            <p><strong>Final Net Water ($\mathbf{W_{net}}$):</strong> ${round(final_water_content).toFixed(1)} \\times ${wCRatioGoverning.toFixed(3)} = <span class="res">${round(final_water_content).toFixed(1)} \text{ kg/m}^3$</span></p>
                             <p><strong>Admixture Content (Ad):</strong> <span class="res">${round(admixture_content).toFixed(3)} \text{ kg/m}^3$</span></p>
             </div>`;
 
@@ -597,9 +601,6 @@
             
             // Entrapped Air 
             const air_content_percent = APPROXIMATE_AIR_CONTENT[msa.toString()];
-            if (air_content_percent === undefined) {
-                 return displayError(`Approximate air content data not found for MSA ${msa}mm. Please check IS 10262 Table 3.`);
-            }
             const V_air = air_content_percent; 
 
             const V_c = (final_cement_content / S_cement) * (1 / 1000);
@@ -611,7 +612,7 @@
 
             calcDetails += `<div class="calculation-step">
                 <h4>4. Absolute Volume Calculation (SSD)</h4>
-                <p>Volume $V_{air}$ (Entrapped Air, IS 10262 Table 3): <span class="res">${(V_air*100).toFixed(1)} \text{ \%} = ${V_air.toFixed(3)} \text{ m}^3$</span></p>
+                <p>Volume $V_{air}$ (Entrapped Air, IS 10262 Table 3): <span class="res">${(V_air*100).toFixed(1)} \text{ \%} = ${V_air.toFixed(5)} \text{ m}^3$</span></p>
                 <p> $V_{non\_agg\_plus\_air} = V_c + V_w + V_{ad} + V_{air}$</p>
                 <p> $V_{non\_agg\_plus\_air}$: ${round(V_c, 5).toFixed(5)} + ${round(V_w, 5).toFixed(5)} + ${round(V_ad, 5).toFixed(5)} + ${V_air.toFixed(5)} = $\mathbf{${round(V_non_agg_plus_air, 5).toFixed(5)} \text{ m}^3$}</p>
                 
@@ -623,30 +624,30 @@
             }
 
 
-            // --- STEP 5: Determine Volume Fractions of Aggregates ---
-            const CA_FRACTION_MAP = CA_VOLUME_FRACTION[msa.toString()];
-            const keys = Object.keys(CA_FRACTION_MAP).map(Number).sort((a, b) => a - b);
-            let Vca_Vt_ratio; 
+            // --- STEP 5: Determine Volume Fractions of Aggregates (IS 10262, Clause 5.5) ---
+            const BASE_WC_RATIO = 0.5;
+            const Vca_Vt_base = CA_VOLUME_FRACTION_BASE_0_5[msa.toString()];
+            
+            // 5.5.1 W/C Ratio Adjustment
+            // Increase by 0.01 for every decrease in W/C by 0.05
+            const wc_difference = BASE_WC_RATIO - wCRatioGoverning; 
+            const wc_adjustment_steps = Math.round(wc_difference / 0.05); // Round to nearest step (e.g., 0.1 difference is 2 steps)
+            const Vca_Vt_adjustment = wc_adjustment_steps * 0.01;
+            let Vca_Vt_ratio_strength = Vca_Vt_base + Vca_Vt_adjustment;
 
-            // Interpolation for Vca/Vt ratio based on FWCR_gov
-            if (wCRatioGoverning <= keys[0]) {
-                Vca_Vt_ratio = CA_FRACTION_MAP[keys[0]];
-            } else if (wCRatioGoverning >= keys[keys.length - 1]) {
-                Vca_Vt_ratio = CA_FRACTION_MAP[keys[keys.length - 1]];
-            } else {
-                for (let i = 0; i < keys.length - 1; i++) {
-                    const k1 = keys[i];
-                    const k2 = keys[i+1];
-                    if (wCRatioGoverning >= k1 && wCRatioGoverning <= k2) {
-                        const b1 = CA_FRACTION_MAP[k1];
-                        const b2 = CA_FRACTION_MAP[k2];
-                        Vca_Vt_ratio = b1 + (b2 - b1) * ((wCRatioGoverning - k1) / (k2 - k1));
-                        break;
-                    }
-                }
+            // 5.5.2 Workability Reduction (Max 10%)
+            let final_Vca_Vt_ratio = Vca_Vt_ratio_strength;
+            let reduction_factor = 1.0;
+            let reduction_message = 'No workability reduction applied (Non-Pumpable).';
+
+            if (placingMethod === 'Pumpable') {
+                // Apply 10% reduction (max permissible) for the pumpable mix
+                reduction_factor = 0.90;
+                final_Vca_Vt_ratio = Vca_Vt_ratio_strength * reduction_factor;
+                reduction_message = '10% reduction applied for Pumpable concrete (Clause 5.5.2).';
             }
 
-            const V_ca = V_agg * Vca_Vt_ratio;
+            const V_ca = V_agg * final_Vca_Vt_ratio;
             const V_fa = V_agg - V_ca;
 
             // Calculate SSD Masses
@@ -654,9 +655,19 @@
             const FA_mass_ssd = V_fa * S_fa * 1000;
 
             calcDetails += `<div class="calculation-step">
-                <h4>5. Individual Aggregate Volumes and SSD Mass</h4>
-                <p>Volume of CA to Total Aggregate ($\mathbf{V_{ca}/V_{t}}$) from IS 10262 Table 5 (Interpolated for W/C ${wCRatioGoverning.toFixed(3)}$): <span class="res">${round(Vca_Vt_ratio, 3).toFixed(3)}</span></p>
-                <p>Volume of CA ($V_{ca}$): ${round(V_agg, 5).toFixed(5)} \\times ${round(Vca_Vt_ratio, 3).toFixed(3)} = <span class="res">${round(V_ca, 5).toFixed(5)} \text{ m}^3$</span></p>
+                <h4>5. Individual Aggregate Volumes and SSD Mass (IS 10262, Clause 5.5)</h4>
+                
+                <p>1. Base $V_{ca}/V_{t}$ Ratio (Table 5 for W/C = 0.5, MSA ${msa}mm): <span class="res">${Vca_Vt_base.toFixed(3)}</span></p>
+                <p>2. W/C Ratio Adjustment ($\Delta (V_{ca}/V_{t})$ for $\mathbf{FWCR_{gov}} = ${wCRatioGoverning.toFixed(3)}$):</p>
+                <p class="pl-4">Difference from Base W/C (0.5): ${round(wc_difference, 3).toFixed(3)}</p>
+                <p class="pl-4">Adjustment: ${wc_adjustment_steps} steps $\\times 0.01 = \mathbf{${Vca_Vt_adjustment.toFixed(3)}}$</p>
+                <p>3. Adjusted $V_{ca}/V_{t}$ (Strength): ${Vca_Vt_base.toFixed(3)} + ${Vca_Vt_adjustment.toFixed(3)} = <span class="res">${Vca_Vt_ratio_strength.toFixed(3)}</span></p>
+
+                <p>4. Workability Reduction (for Placing Method: ${placingMethod}):</p>
+                <p class="pl-4">${reduction_message}</p>
+                <p><strong>Final $V_{ca}/V_{t}$ Ratio:</strong> ${Vca_Vt_ratio_strength.toFixed(3)} $\\times$ ${reduction_factor.toFixed(2)} $= \mathbf{${final_Vca_Vt_ratio.toFixed(3)}}$</p>
+
+                <p>Volume of CA ($V_{ca}$): ${round(V_agg, 5).toFixed(5)} \\times ${final_Vca_Vt_ratio.toFixed(3)} = <span class="res">${round(V_ca, 5).toFixed(5)} \text{ m}^3$</span></p>
                 <p>Volume of FA ($V_{fa}$): ${round(V_agg, 5).toFixed(5)} - ${round(V_ca, 5).toFixed(5)} = <span class="res">${round(V_fa, 5).toFixed(5)} \text{ m}^3$</span></p>
                 
                 <p><strong>Coarse Aggregate ($M_{ca}$ SSD):</strong> ${round(V_ca, 5).toFixed(5)} \\times ${S_ca} \\times 1000 = <span class="res">${round(CA_mass_ssd).toFixed(1)} \text{ kg/m}^3$</span></p>
