@@ -57,24 +57,40 @@
             color: #1f2937;
         }
 
-        /* Styles for PDF Generation */
+        /* ------------------------------------------------ */
+        /* PDF Specific Styles (Fixed Font Size for A4)     */
+        /* ------------------------------------------------ */
+
+        #output-for-pdf {
+            padding: 20px;
+            background: #ffffff;
+            font-family: Arial, sans-serif;
+            font-size: 12px; /* Base font size for PDF content */
+            width: 794px; /* Approximate A4 width at 96 DPI for html2canvas */
+        }
         .pdf-header {
             padding-bottom: 10px;
             margin-bottom: 15px;
             border-bottom: 2px solid #34d399;
         }
         .pdf-header h1 {
-            font-size: 18px;
+            font-size: 16px;
             font-weight: bold;
             color: #10b981;
         }
         .pdf-header p {
-            font-size: 12px;
+            font-size: 10px;
             margin: 2px 0;
         }
-        #output-for-pdf {
-            padding: 20px;
-            background: #ffffff;
+        #pdf-content .calculation-step {
+            padding: 0.5rem;
+            font-size: 10px; /* Small font for detailed steps */
+        }
+        #pdf-content .calculation-step h4 {
+            font-size: 12px;
+        }
+        #pdf-content .mix-ratio {
+             font-size: 12px;
         }
     </style>
 </head>
@@ -285,19 +301,19 @@
                         <li>Min Grade (IS 456, Table 5): <span id="min_grade_req_display" class="font-mono font-bold text-red-600">N/A</span></li>
                         <li>Min Cement Content (IS 456, Table 5): <span id="min_cement_req" class="font-mono font-bold text-red-600">N/A</span> kg/m³</li>
                         <li>Max W/C Ratio (Durability): <span id="max_wc_req" class="font-mono font-bold text-red-600">N/A</span></li>
-                        <li class="mt-2 text-xs"><strong>Governing W/C Ratio ($\mathbf{FWCR_{gov}}$):</strong> <span id="governing_wc" class="font-mono font-bold text-blue-600">N/A</span> (Lowest of Strength, Durability, and Design Input)</li>
+                        <li class="mt-2 text-xs"><strong>Governing W/C Ratio (FWCR<sub>gov</sub>):</strong> <span id="governing_wc" class="font-mono font-bold text-blue-600">N/A</span> (Lowest of Strength, Durability, and Design Input)</li>
                     </ul>
                     <h3 class="text-xl font-bold text-gray-800 border-t pt-2 mt-4">Design Checks & Adjustments</h3>
                     <p id="placing_warning" class="text-xs text-orange-600 mt-1 font-semibold hidden bg-orange-100 p-2 rounded"></p>
                     <p id="cement_max_warning" class="text-xs text-red-600 mt-1 font-semibold hidden bg-red-100 p-2 rounded"></p>
                     
-                    <p id="target-strength-display" class="font-medium text-lg text-green-700 border-t pt-4">Target Strength ($f'_{ck}$): N/A</p>
+                    <p id="target-strength-display" class="font-medium text-lg text-green-700 border-t pt-4">Target Strength (f'<sub>ck</sub>): N/A</p>
                     <p id="water_content_display" class="text-sm text-gray-700">Net Water Content Used: <span id="res_water_net" class="font-mono font-bold text-gray-800">N/A</span> kg/m³</p>
 
 
                     <div id="output-final-mix" class="space-y-2">
                         <h3 class="text-xl font-bold text-gray-800 border-t pt-2 mt-4">Required Quantities (SSD Mass)</h3>
-                        <p class="text-sm">These quantities are based on Saturated Surface Dry (SSD) condition.</p>
+                        <p class="text-sm">These quantities are based on **Saturated Surface Dry (SSD)** condition.</p>
                         <ul class="space-y-1" id="ssd-results-list">
                             <li>Cement: <span id="res_cement" class="font-mono bg-yellow-200 px-2 py-0.5 rounded">0.0</span> kg/m³</li>
                             <li>Water (Net): <span id="res_water" class="font-mono bg-yellow-200 px-2 py-0.5 rounded">0.0</span> kg/m³</li>
@@ -307,7 +323,7 @@
                         </ul>
 
                         <h3 class="text-xl font-bold text-gray-800 border-t pt-2 mt-4">Field Quantities (with Moisture Correction)</h3>
-                        <p class="text-sm">These are the masses to be batched considering moisture content in aggregates.</p>
+                        <p class="text-sm">These are the masses to be batched considering **moisture content** in aggregates.</p>
                         <ul class="space-y-1" id="field-results-list">
                             <li>Cement: <span id="field_cement" class="font-mono bg-blue-200 px-2 py-0.5 rounded">0.0</span> kg/m³</li>
                             <li>Water (Adjusted): <span id="field_water" class="font-mono bg-blue-200 px-2 py-0.5 rounded">0.0</span> kg/m³</li>
@@ -328,56 +344,15 @@
 
     <script>
         // IS 10262:2019 Lookup Tables (Simplified)
-
-        // Standard Deviation (S) lookup based on Concrete Grade (IS 456 Table 8)
-        const STANDARD_DEVIATION = {
-            '10': 3.5, 
-            '15': 3.5,
-            '20': 4.0, 
-            '25': 4.0,
-            // M30 and above are 5.0 MPa
-            '30': 5.0,
-            '35': 5.0,
-            '40': 5.0,
-            '45': 5.0,
-            '50': 5.0,
-        };
-        
-        // F.W/C Ratio corresponding to Target Mean Strength (IS 10262:2019 Table 1) - Curve 1 (OPC 53)
-        const FWC_RATIO_TARGET_STRENGTH_OPC53 = {
-            20: 0.60, 25: 0.55, 30: 0.50, 35: 0.45, 40: 0.40, 45: 0.35, 50: 0.30, 55: 0.25, 60: 0.20,
-        };
-
-        // F.W/C Ratio corresponding to Target Mean Strength - Curve 2 (PPC / OPC 43 / PSC)
-        const FWC_RATIO_TARGET_STRENGTH_PPC_OPC43 = {
-            25: 0.60, 30: 0.55, 35: 0.50, 40: 0.45, 45: 0.40, 50: 0.35, 55: 0.30, 60: 0.25, 65: 0.20,
-        };
-        
-        // Water Reduction Rate based on user's trial data for Superplasticizer (Arbitrary assumed value)
+        const STANDARD_DEVIATION = { '10': 3.5, '15': 3.5, '20': 4.0, '25': 4.0, '30': 5.0, '35': 5.0, '40': 5.0, '45': 5.0, '50': 5.0, };
+        const FWC_RATIO_TARGET_STRENGTH_OPC53 = { 20: 0.60, 25: 0.55, 30: 0.50, 35: 0.45, 40: 0.40, 45: 0.35, 50: 0.30, 55: 0.25, 60: 0.20, };
+        const FWC_RATIO_TARGET_STRENGTH_PPC_OPC43 = { 25: 0.60, 30: 0.55, 35: 0.50, 40: 0.45, 45: 0.40, 50: 0.35, 55: 0.30, 60: 0.25, 65: 0.20, };
         const SUPERPLASTICIZER_REDUCTION_RATE = 0.23; 
         const MAX_ADMIXTURE_WATER_REDUCTION = 0.30; 
-
-        // Approximate Water Content (kg/m³) for 25-50mm Slump (Table 4, IS 10262:2019)
-        const INITIAL_WATER_CONTENT = {
-            '10': 208, '20': 186, '40': 165,
-        };
-        
-        // Approximate Entrapped Air Content (Fraction of Volume) (Table 3, IS 10262:2019)
-        const APPROXIMATE_AIR_CONTENT = {
-            '10': 0.030, '20': 0.020, '40': 0.010,
-        };
-
-        // Water Content Correction based on Aggregate Type (IS 10262:2019 Clause 4.2.2.1)
-        const AGGREGATE_WATER_CORRECTION = {
-            'Rounded': -25, 'SubAngular': -10, 'CrushedAngular': 0, 
-        };
-
-        // Volume of Coarse Aggregate (CA) per unit volume of total aggregate at W/C=0.5 (Table 5, IS 10262:2019, Zone II Fine Aggregate)
-        const CA_VOLUME_FRACTION_BASE_0_5 = {
-            '20': 0.59, '40': 0.68, '10': 0.46,
-        };
-
-        // Durability Requirements (IS 456:2000, Table 5, Reinforced Concrete, based on Exposure)
+        const INITIAL_WATER_CONTENT = { '10': 208, '20': 186, '40': 165, };
+        const APPROXIMATE_AIR_CONTENT = { '10': 0.030, '20': 0.020, '40': 0.010, };
+        const AGGREGATE_WATER_CORRECTION = { 'Rounded': -25, 'SubAngular': -10, 'CrushedAngular': 0, };
+        const CA_VOLUME_FRACTION_BASE_0_5 = { '20': 0.59, '40': 0.68, '10': 0.46, };
         const IS_456_DURABILITY_LIMITS = {
             'Mild': { min_cement: 300, max_wc: 0.50, min_grade: 20 },
             'Moderate': { min_cement: 310, max_wc: 0.45, min_grade: 25 },
@@ -386,7 +361,6 @@
             'Extreme': { min_cement: 340, max_wc: 0.40, min_grade: 40 }
         };
 
-        // Utility function to round to specific decimal places
         const round = (num, dp = 2) => Math.round(num * (10 ** dp)) / (10 ** dp);
 
         function displayError(message) {
@@ -445,7 +419,7 @@
             const exposure = document.getElementById('exposure').value; 
             const msa = parseInt(document.getElementById('msa').value); 
             const requiredSlump = parseFloat(document.getElementById('slump').value); 
-            const wCRatioDesign = parseFloat(document.getElementById('w_c_ratio_input').value); // User Input
+            const wCRatioDesign = parseFloat(document.getElementById('w_c_ratio_input').value); 
             const S_cement = parseFloat(document.getElementById('sg_cement').value); 
             const S_fa = parseFloat(document.getElementById('sg_fa').value); 
             const S_ca = parseFloat(document.getElementById('sg_ca').value); 
@@ -464,8 +438,14 @@
             const admixtureType = document.getElementById('admixture_type').value;
             const placingMethod = document.getElementById('placing_method').value;
 
-            // ... (Input Validation) ...
-
+            // Input Validation (Basic)
+            if (isNaN(fck) || fck < 10 || isNaN(msa) || isNaN(wCRatioDesign) || isNaN(S_cement) || isNaN(S_fa) || isNaN(S_ca) || isNaN(S_admixture) || wCRatioDesign <= 0 || S_cement <= 0 || S_fa <= 0 || S_ca <= 0 || S_admixture <= 0) {
+                return displayError("Please ensure all primary input fields have valid positive numbers.");
+            }
+            if (!IS_456_DURABILITY_LIMITS[exposure] || !CA_VOLUME_FRACTION_BASE_0_5[msa.toString()]) {
+                return displayError("One or more key inputs (Exposure/MSA) are invalid or missing data.");
+            }
+            
             // Reset Warnings
             const maxCementWarningElement = document.getElementById('max_cement_warning');
             maxCementWarningElement.classList.add('hidden');
@@ -476,16 +456,17 @@
             let calcDetails = '';
 
 
-            // --- STEP 1: Target Mean Strength ($f'_{ck}$) ---
+            // --- STEP 1: Target Mean Strength (f'ck) ---
             let S = STANDARD_DEVIATION[fck.toString()];
             if (!S) { S = (fck >= 30) ? 5.0 : 4.0; }
             const fck_target = fck + (1.65 * S);
-            document.getElementById('target-strength-display').textContent = `Target Strength ($f'_{ck}$): ${round(fck_target)} MPa`;
+            document.getElementById('target-strength-display').textContent = `Target Strength (f'ck): ${round(fck_target)} MPa`;
 
             calcDetails += `<div class="calculation-step">
-                <h4>1. Target Mean Strength ($f'_{ck}$)</h4>
-                <p>Formula: $f'_{ck} = f_{ck} + 1.65 \\times S$</p>
-                <p>Calculation: ${fck} + 1.65 \\times ${S} = \\mathbf{${round(fck_target).toFixed(2)}} \text{ MPa}$</p>
+                <h4>1. Target Mean Strength (f'<sub>ck</sub>)</h4>
+                <p>Formula: f'<sub>ck</sub> = f<sub>ck</sub> + 1.65 × S</p>
+                <p>Where f<sub>ck</sub> = ${fck} MPa and S = ${S} MPa (Standard Deviation).</p>
+                <p>Calculation: ${fck} + 1.65 × ${S} = <strong>${round(fck_target).toFixed(2)} MPa</strong></p>
             </div>`;
             
             
@@ -511,11 +492,11 @@
             document.getElementById('governing_wc').textContent = wCRatioGoverning.toFixed(3);
 
             calcDetails += `<div class="calculation-step">
-                <h4>2. Determine Governing Free Water-Cement Ratio ($\mathbf{FWCR_{gov}}$)</h4>
+                <h4>2. Determine Governing Free Water-Cement Ratio (FWCR<sub>gov</sub>)</h4>
                 <p>1. W/C Ratio for Target Strength: <span class="res">${round(wc_req_strength, 4).toFixed(4)}</span></p>
                 <p>2. Maximum W/C Ratio for Durability: <span class="res">${max_wc_req_durability.toFixed(2)}</span></p>
                 <p>3. Input Design W/C Ratio: <span class="res">${wCRatioDesign.toFixed(2)}</span></p>
-                <p>$\mathbf{FWCR_{gov}} = \min(\text{1, 2, 3}) = \mathbf{${wCRatioGoverning.toFixed(3)}}$</p>
+                <p><strong>FWCR<sub>gov</sub></strong> = min(1, 2, 3) = <strong>${wCRatioGoverning.toFixed(3)}</strong></p>
                 <p>Result: ${wc_selection_message}</p>
             </div>`;
 
@@ -525,7 +506,7 @@
             calcDetails += `<div class="calculation-step">
                 <h4>3. Determine Water and Cement Content</h4>
                 
-                <p>Initial Water ($\text{W}_{initial}$ for ${msa}mm MSA, 25-50mm slump): ${INITIAL_WATER_CONTENT[msa.toString()]} \text{ kg/m}^3$</p>`;
+                <p>Initial Water (W<sub>initial</sub> for ${msa}mm MSA, 25-50mm slump): ${INITIAL_WATER_CONTENT[msa.toString()]} kg/m³</p>`;
             
             const water_content_initial = INITIAL_WATER_CONTENT[msa.toString()];
             const agg_correction = AGGREGATE_WATER_CORRECTION[aggregateType] || 0;
@@ -537,7 +518,7 @@
             const slump_correction_factor = 1 + (slump_difference / 25) * 0.03;
             let water_content_slump = water_content_base * slump_correction_factor;
 
-            calcDetails += `<p>Water after Agg. & Slump Correction: $\\text{W}_{base} = \mathbf{${water_content_slump.toFixed(2)} \text{ kg/m}^3$}</p>`;
+            calcDetails += `<p>Water after Agg. & Slump Correction: W<sub>base</sub> = <strong>${water_content_slump.toFixed(2)} kg/m³</strong></p>`;
 
             // Admixture Reduction
             let water_reduction_percent = 0;
@@ -555,10 +536,10 @@
                  }
 
                  water_content_net = water_content_slump * (1 - water_reduction_percent);
-                 calcDetails += `<p>Water Reduction (Admixture): ${round(water_reduction_percent * 100, 2)} \text{ \%} \text{ (${reduction_reason})}</p>
-                                 <p>Water Content ($\mathbf{W_{net}}$) after Admixture: <span class="res">${round(water_content_net).toFixed(1)} \text{ kg/m}^3$</span></p>`;
+                 calcDetails += `<p>Water Reduction (Admixture): ${round(water_reduction_percent * 100, 2)} % (${reduction_reason})</p>
+                                 <p>Water Content (<strong>W<sub>net</sub></strong>) after Admixture: <span class="res">${round(water_content_net).toFixed(1)} kg/m³</span></p>`;
             } else {
-                 calcDetails += `<p>Admixture Reduction: $0\%$. $\mathbf{W_{net}} = ${round(water_content_net).toFixed(1)} \text{ kg/m}^3$</p>`;
+                 calcDetails += `<p>Admixture Reduction: 0%. <strong>W<sub>net</sub></strong> = ${round(water_content_net).toFixed(1)} kg/m³</p>`;
             }
 
             // Cement Content
@@ -566,18 +547,15 @@
             let final_cement_content = cement_content;
             let cement_check_message = '';
 
-            // Check Minimum Cement
+            // Check Minimum/Maximum Cement
             if (final_cement_content < min_cement_req) {
                 final_cement_content = min_cement_req;
-                cement_check_message = `Initial $C$ is less than Min $C$ (${min_cement_req}$). Min $C$ adopted.`;
-            }
-
-            // Check Maximum Cement
-            if (final_cement_content > maxCementLimit) {
+                cement_check_message = `Initial C is less than Min C (${min_cement_req}). Min C adopted.`;
+            } else if (final_cement_content > maxCementLimit) {
                 maxCementWarningElement.textContent = `WARNING: Calculated Cement Content (${round(final_cement_content).toFixed(1)} kg/m³) exceeds the specified Maximum Limit (${maxCementLimit} kg/m³). Using Max Limit for calculation.`;
                 maxCementWarningElement.classList.remove('hidden');
                 final_cement_content = maxCementLimit;
-                cement_check_message = `Calculated $C$ exceeds Max $C$ (${maxCementLimit}$). Max $C$ adopted.`;
+                cement_check_message = `Calculated C exceeds Max C (${maxCementLimit}). Max C adopted.`;
             }
 
             // Recalculate W_net if cement was capped to maintain FWCR_gov
@@ -589,9 +567,9 @@
             const admixture_content = final_cement_content * admixtureDosageFraction; 
 
             calcDetails += `<p>Cement Content Check: ${cement_check_message || 'N/A'}</p>
-                            <p><strong>Final Cement Content (C):</strong> <span class="res">${round(final_cement_content).toFixed(1)} \text{ kg/m}^3$</span></p>
-                            <p><strong>Final Net Water ($\mathbf{W_{net}}$):</strong> ${round(final_water_content).toFixed(1)} \text{ kg/m}^3$</p>
-                            <p><strong>Admixture Content (Ad):</strong> <span class="res">${round(admixture_content).toFixed(3)} \text{ kg/m}^3$</span></p>
+                            <p><strong>Final Cement Content (C):</strong> <span class="res">${round(final_cement_content).toFixed(1)} kg/m³</span></p>
+                            <p><strong>Final Net Water (W<sub>net</sub>):</strong> ${round(final_water_content).toFixed(1)} kg/m³</p>
+                            <p><strong>Admixture Content (Ad):</strong> <span class="res">${round(admixture_content).toFixed(3)} kg/m³</span></p>
             </div>`;
 
 
@@ -608,10 +586,10 @@
 
             calcDetails += `<div class="calculation-step">
                 <h4>4. Absolute Volume Calculation (SSD)</h4>
-                <p>Absolute Volumes: $V_c = ${round(V_c, 5).toFixed(5)}$, $V_w = ${round(V_w, 5).toFixed(5)}$, $V_{ad} = ${round(V_ad, 5).toFixed(5)}$, $V_{air} = ${V_air.toFixed(5)} \text{ m}^3$</p>
-                <p> $V_{non\_agg\_plus\_air}$: ${round(V_non_agg_plus_air, 5).toFixed(5)} \text{ m}^3$</p>
+                <p>Absolute Volumes: V<sub>c</sub> = ${round(V_c, 5).toFixed(5)}, V<sub>w</sub> = ${round(V_w, 5).toFixed(5)}, V<sub>ad</sub> = ${round(V_ad, 5).toFixed(5)}, V<sub>air</sub> = ${V_air.toFixed(5)} m³</p>
+                <p> V<sub>non_agg_plus_air</sub>: ${round(V_non_agg_plus_air, 5).toFixed(5)} m³</p>
                 
-                <p><strong>Total Aggregate Volume ($\mathbf{V_{agg}}$):</strong> $1.0 - V_{non\_agg\_plus\_air} = \\mathbf{${round(V_agg, 5).toFixed(5)} \text{ m}^3$}</p>
+                <p><strong>Total Aggregate Volume (V<sub>agg</sub>):</strong> 1.0 - V<sub>non_agg_plus_air</sub> = <strong>${round(V_agg, 5).toFixed(5)} m³</strong></p>
             </div>`;
             
             if (V_agg <= 0) {
@@ -650,18 +628,18 @@
             calcDetails += `<div class="calculation-step">
                 <h4>5. Individual Aggregate Volumes and SSD Mass (IS 10262, Clause 5.5)</h4>
                 
-                <p>1. Base $V_{ca}/V_{t}$ Ratio (Table 5 for W/C = 0.5, MSA ${msa}mm): <span class="res">${Vca_Vt_base.toFixed(3)}</span></p>
-                <p>2. W/C Adjustment (Diff: ${round(wc_difference, 3).toFixed(3)}): ${wc_adjustment_steps} steps $\\times 0.01 = \mathbf{${Vca_Vt_adjustment.toFixed(3)}}$</p>
-                <p>3. Adjusted $V_{ca}/V_{t}$ (Strength): <span class="res">${Vca_Vt_ratio_strength.toFixed(3)}</span></p>
+                <p>1. Base V<sub>ca</sub>/V<sub>t</sub> Ratio (Table 5 for W/C = 0.5, MSA ${msa}mm): <span class="res">${Vca_Vt_base.toFixed(3)}</span></p>
+                <p>2. W/C Adjustment (Diff: ${round(wc_difference, 3).toFixed(3)}): ${wc_adjustment_steps} steps × 0.01 = <strong>${Vca_Vt_adjustment.toFixed(3)}</strong></p>
+                <p>3. Adjusted V<sub>ca</sub>/V<sub>t</sub> (Strength): <span class="res">${Vca_Vt_ratio_strength.toFixed(3)}</span></p>
 
                 <p>4. Workability Adjustment (${placingMethod}): ${reduction_message}</p>
-                <p><strong>Final $V_{ca}/V_{t}$ Ratio:</strong> $\mathbf{${final_Vca_Vt_ratio.toFixed(3)}}$</p>
+                <p><strong>Final V<sub>ca</sub>/V<sub>t</sub> Ratio:</strong> <strong>${final_Vca_Vt_ratio.toFixed(3)}</strong></p>
 
-                <p>Volume of CA ($V_{ca}$): ${round(V_ca, 5).toFixed(5)} \text{ m}^3$</p>
-                <p>Volume of FA ($V_{fa}$): ${round(V_fa, 5).toFixed(5)} \text{ m}^3$</p>
+                <p>Volume of CA (V<sub>ca</sub>): ${round(V_ca, 5).toFixed(5)} m³</p>
+                <p>Volume of FA (V<sub>fa</sub>): ${round(V_fa, 5).toFixed(5)} m³</p>
                 
-                <p><strong>Coarse Aggregate ($M_{ca}$ SSD):</strong> <span class="res">${round(CA_mass_ssd).toFixed(1)} \text{ kg/m}^3$</span></p>
-                <p><strong>Fine Aggregate ($M_{fa}$ SSD):</strong> <span class="res">${round(FA_mass_ssd).toFixed(1)} \text{ kg/m}^3$</span></p>
+                <p><strong>Coarse Aggregate (M<sub>ca</sub> SSD):</strong> <span class="res">${round(CA_mass_ssd).toFixed(1)} kg/m³</span></p>
+                <p><strong>Fine Aggregate (M<sub>fa</sub> SSD):</strong> <span class="res">${round(FA_mass_ssd).toFixed(1)} kg/m³</span></p>
             </div>`;
 
 
@@ -677,13 +655,13 @@
 
             calcDetails += `<div class="calculation-step">
                 <h4>6. Moisture Correction and Field Quantities</h4>
-                <p>Water Corr. (FA): ${round(fa_correction_kg).toFixed(2)} \text{ kg}$. Water Corr. (CA): ${round(ca_correction_kg).toFixed(2)} \text{ kg}$</p>
+                <p>Water Corr. (FA): ${round(fa_correction_kg).toFixed(2)} kg. Water Corr. (CA): ${round(ca_correction_kg).toFixed(2)} kg</p>
                 
-                <p>Total Water Correction ($\Delta W$): <span class="res">${round(total_water_correction).toFixed(2)} \text{ kg}$</span></p>
+                <p>Total Water Correction (ΔW): <span class="res">${round(total_water_correction).toFixed(2)} kg</span></p>
                 
-                <p><strong>Batched Water ($W_{field}$):</strong> $W_{net} - \Delta W = <span class="res">${round(Math.max(0, water_mass_adjusted)).toFixed(1)} \text{ kg/m}^3$</span></p>
-                <p><strong>Batched FA Mass ($\mathbf{M_{fa}}$ Wet):</strong> <span class="res">${round(FA_mass_field).toFixed(1)} \text{ kg/m}^3$</span></p>
-                <p><strong>Batched CA Mass ($\mathbf{M_{ca}}$ Wet):</strong> <span class="res">${round(CA_mass_field).toFixed(1)} \text{ kg/m}^3$</span></p>
+                <p><strong>Batched Water (W<sub>field</sub>):</strong> W<sub>net</sub> - ΔW = <span class="res">${round(Math.max(0, water_mass_adjusted)).toFixed(1)} kg/m³</span></p>
+                <p><strong>Batched FA Mass (M<sub>fa</sub> Wet):</strong> <span class="res">${round(FA_mass_field).toFixed(1)} kg/m³</span></p>
+                <p><strong>Batched CA Mass (M<sub>ca</sub> Wet):</strong> <span class="res">${round(CA_mass_field).toFixed(1)} kg/m³</span></p>
             </div>`;
 
 
@@ -742,39 +720,61 @@
 
         function generatePdf(targetElementId, filename) {
             const targetElement = document.getElementById(targetElementId);
-            const headerElement = document.getElementById('pdf-header');
             const pdfContentElement = document.getElementById('pdf-content');
             const outputForPdf = document.getElementById('output-for-pdf');
 
             // 1. Prepare content in the hidden container
-            pdfContentElement.innerHTML = targetElement.innerHTML;
+            // Clear previous content and append new target content
+            pdfContentElement.innerHTML = '';
+            
+            // If the target is an ID other than the holder, we clone the required content
+            if (targetElementId === 'pdf-content-summary') {
+                // Summary content is handled by generateSummaryPdf, which places the nodes in a dummy div.
+                const summaryDiv = document.getElementById('summary-content-dummy');
+                // Move content from dummy div to actual PDF content div
+                while (summaryDiv.firstChild) {
+                    pdfContentElement.appendChild(summaryDiv.firstChild);
+                }
+            } else {
+                 // For Detailed Calculations, simply copy the innerHTML
+                 pdfContentElement.innerHTML = targetElement.innerHTML;
+            }
+
             outputForPdf.classList.remove('hidden');
 
             // 2. Generate PDF using html2canvas and jsPDF
+            // Scale set to 2 for better resolution, especially with smaller fonts.
             html2canvas(outputForPdf, { 
-                scale: 2, // Improve resolution
+                scale: 2, 
                 useCORS: true, 
                 scrollX: 0,
                 scrollY: 0,
-                windowWidth: outputForPdf.scrollWidth,
-                windowHeight: outputForPdf.scrollHeight
+                windowWidth: outputForPdf.offsetWidth,
+                windowHeight: outputForPdf.offsetHeight
             }).then(canvas => {
                 const imgData = canvas.toDataURL('image/png');
                 const pdf = new jsPDF('p', 'mm', 'a4');
                 const imgProps= pdf.getImageProperties(imgData);
                 const pdfWidth = pdf.internal.pageSize.getWidth();
+                // Calculate height to maintain aspect ratio
                 const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
                 
                 let position = 0;
+                let pageHeight = pdf.internal.pageSize.getHeight();
                 
                 // If content exceeds one page
-                if (pdfHeight > pdf.internal.pageSize.getHeight()) {
+                if (pdfHeight > pageHeight) {
                     let heightLeft = pdfHeight;
                     while (heightLeft > 0) {
+                        // The scale factor 2 in html2canvas means the image is twice as large, so adjust position based on the rendered height
+                        const imgHeightOnPage = pdfWidth * (pageHeight / pdf.internal.pageSize.getWidth());
+                        
+                        // Add image slice to PDF
                         pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight);
-                        heightLeft -= pdf.internal.pageSize.getHeight();
-                        position -= 297; // A4 height in mm
-                        if (heightLeft > 0) {
+                        
+                        heightLeft -= pageHeight;
+                        position -= pageHeight;
+                        if (heightLeft > -10) { // Add new page if more content is left, with a small tolerance
                             pdf.addPage();
                         }
                     }
@@ -791,17 +791,29 @@
         }
         
         function generateSummaryPdf() {
-            const targetId = 'output-final-mix';
+            // Use a temporary dummy div to prepare content for the summary PDF
+            let summaryContent = document.getElementById('summary-content-dummy');
+            if (!summaryContent) {
+                summaryContent = document.createElement('div');
+                summaryContent.id = 'summary-content-dummy';
+                summaryContent.style.display = 'none';
+                document.body.appendChild(summaryContent);
+            }
+            summaryContent.innerHTML = '';
+            
             // Clone only the SSD and Field results sections for a cleaner summary
-            const summaryContent = document.createElement('div');
             summaryContent.appendChild(document.getElementById('output-final-mix').querySelector('h3:nth-of-type(1)').cloneNode(true));
             summaryContent.appendChild(document.getElementById('ssd-results-list').cloneNode(true));
             summaryContent.appendChild(document.getElementById('output-final-mix').querySelector('h3:nth-of-type(2)').cloneNode(true));
             summaryContent.appendChild(document.getElementById('field-results-list').cloneNode(true));
+
+            // Also include the Mix Ratio, if present
+            const mixRatioEl = document.getElementById('output-final-mix').querySelector('.mix-ratio');
+            if (mixRatioEl) {
+                summaryContent.appendChild(mixRatioEl.cloneNode(true));
+            }
             
-            document.getElementById('pdf-content').appendChild(summaryContent);
-            
-            generatePdf('pdf-content', 'Mix_Design_Summary.pdf');
+            generatePdf('pdf-content-summary', 'Mix_Design_Summary.pdf');
         }
 
         function generateDetailedPdf() {
@@ -820,3 +832,4 @@
     </script>
 </body>
 </html>
+
