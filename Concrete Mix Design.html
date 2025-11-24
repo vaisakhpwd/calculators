@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>IS 10262:2019 Concrete Mix Design</title>
-    <!-- Load Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         /* Custom styles for better readability and structure */
@@ -33,6 +32,26 @@
         #output-card {
             min-height: 200px;
         }
+        .calculation-step {
+            background-color: #fff;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            border-left: 4px solid #34d399;
+            margin-top: 10px;
+        }
+        .calculation-step h4 {
+            font-weight: 600;
+            color: #10b981;
+            margin-bottom: 5px;
+        }
+        .calculation-step p {
+            font-size: 0.875rem;
+            color: #4b5563;
+        }
+        .calculation-step span.res {
+            font-weight: bold;
+            color: #1f2937;
+        }
     </style>
 </head>
 <body class="p-4 md:p-8 bg-gray-50">
@@ -43,23 +62,19 @@
             <p class="mt-2 text-lg text-gray-600">Calculate material proportions (kg/m³) for 1 cubic meter of concrete.</p>
         </header>
 
-        <main class="grid grid-cols-1 lg:col-span-3 gap-8">
-            <!-- Inputs Column -->
+        <main class="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <section class="lg:col-span-2 space-y-6">
                 <h2 class="text-2xl font-semibold text-gray-700 border-b pb-2 mb-4">Input Parameters</h2>
 
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
 
-                    <!-- 1. Concrete Grade -->
                     <div class="input-group">
                         <label for="grade" class="block text-sm text-gray-700 mb-1">Concrete Grade ($f_{ck}$)</label>
                         <input type="number" id="grade" value="40" min="10" step="5" class="input-field" onchange="calculateMix()">
                         <p class="text-xs text-gray-500 mt-1">Required characteristic compressive strength at 28 days (MPa).</p>
-                        <!-- Warning Area for Grade -->
                         <p id="grade_warning" class="text-xs text-red-600 mt-1 font-semibold hidden"></p>
                     </div>
                     
-                    <!-- 1.5. Type of Cement -->
                     <div class="input-group">
                         <label for="cement_type" class="block text-sm text-gray-700 mb-1">Type of Cement & Grade (IS Code)</label>
                         <select id="cement_type" class="input-field bg-white" onchange="calculateMix()">
@@ -73,7 +88,6 @@
                         <p class="text-xs text-gray-500 mt-1">Used for durability and minimum cement content checks (IS 456).</p>
                     </div>
 
-                    <!-- 1.7. Exposure Condition -->
                     <div class="input-group">
                         <label for="exposure" class="block text-sm text-gray-700 mb-1">Exposure Condition (IS 456, Table 3)</label>
                         <select id="exposure" class="input-field bg-white" onchange="calculateMix()">
@@ -86,7 +100,6 @@
                         <p class="text-xs text-gray-500 mt-1">Affects minimum cement and maximum W/C ratio for durability.</p>
                     </div>
                     
-                    <!-- 1.8. Degree of Site Control -->
                     <div class="input-group">
                         <label for="site_control" class="block text-sm text-gray-700 mb-1">Degree of Site Control</label>
                         <select id="site_control" class="input-field bg-white" onchange="calculateMix()">
@@ -96,16 +109,13 @@
                         <p class="text-xs text-gray-500 mt-1">Influences standard deviation ($S$) for target strength. (Currently using conservative $S$).</p>
                     </div>
                     
-                    <!-- 4. Water-Cement Ratio -->
                     <div class="input-group">
                         <label for="w_c_ratio_input" class="block text-sm text-gray-700 mb-1">Design Water-Cement Ratio (W/C)</label>
                         <input type="number" id="w_c_ratio_input" value="0.40" step="0.01" min="0.30" max="0.60" class="input-field" onchange="calculateMix()">
                         <p class="text-xs text-gray-500 mt-1">W/C Ratio chosen for strength calculation ($f'_{ck}$).</p>
-                        <!-- Warning Area for W/C Ratio -->
                         <p id="wc_ratio_warning" class="text-xs text-red-600 mt-1 font-semibold hidden"></p>
                     </div>
                     
-                    <!-- 4.1. Max Cement Content (Durability/Thermal) -->
                     <div class="input-group">
                         <label for="max_cement_content" class="block text-sm text-gray-700 mb-1">Max Cement Content (Exc. Fly Ash/SCMs) (kg/m³)</label>
                         <input type="number" id="max_cement_content" value="450" min="300" step="10" class="input-field" onchange="calculateMix()">
@@ -113,7 +123,6 @@
                         <p id="max_cement_warning" class="text-xs text-red-600 mt-1 font-semibold hidden"></p>
                     </div>
 
-                    <!-- 2. Max Nominal Aggregate Size (MSA) -->
                     <div class="input-group">
                         <label for="msa" class="block text-sm text-gray-700 mb-1">Max Aggregate Size (MSA)</label>
                         <select id="msa" class="input-field bg-white" onchange="calculateMix()">
@@ -124,7 +133,6 @@
                         <p class="text-xs text-gray-500 mt-1">Determines initial water content.</p>
                     </div>
                     
-                    <!-- 2.1. Type of Coarse Aggregate -->
                     <div class="input-group">
                         <label for="aggregate_type" class="block text-sm text-gray-700 mb-1">Type of Aggregate</label>
                         <select id="aggregate_type" class="input-field bg-white" onchange="calculateMix()">
@@ -135,7 +143,6 @@
                         <p class="text-xs text-gray-500 mt-1">Affects water demand (up to $\pm$ 20 kg/m³ correction from base table).</p>
                     </div>
 
-                    <!-- 2.5. Method of Placing (NEW) -->
                     <div class="input-group">
                         <label for="placing_method" class="block text-sm text-gray-700 mb-1">Method of Placing</label>
                         <select id="placing_method" class="input-field bg-white" onchange="calculateMix()">
@@ -145,14 +152,12 @@
                         <p class="text-xs text-gray-500 mt-1">Affects workability (slump) requirement and max aggregate size recommendations.</p>
                     </div>
                     
-                    <!-- 3. Slump/Workability -->
                     <div class="input-group">
                         <label for="slump" class="block text-sm text-gray-700 mb-1">Required Slump/Workability (mm)</label>
                         <input type="number" id="slump" value="75" min="25" class="input-field" onchange="calculateMix()">
                         <p class="text-xs text-gray-500 mt-1">Typically 75-100 mm for Pumping/Heavy reinforcement.</p>
                     </div>
 
-                    <!-- 3.1. Chemical Admixture Type -->
                     <div class="input-group">
                         <label for="admixture_type" class="block text-sm text-gray-700 mb-1">Chemical Admixture Type</label>
                         <select id="admixture_type" class="input-field bg-white" onchange="calculateMix()">
@@ -164,7 +169,6 @@
                         <p class="text-xs text-gray-500 mt-1">Used primarily to reduce water content for required workability.</p>
                     </div>
 
-                    <!-- Specific Gravities -->
                     <div class="input-group">
                         <label for="sg_cement" class="block text-sm text-gray-700 mb-1">Specific Gravity of Cement</label>
                         <input type="number" id="sg_cement" value="2.88" step="0.01" class="input-field" onchange="calculateMix()">
@@ -177,21 +181,25 @@
                         <label for="sg_ca" class="block text-sm text-gray-700 mb-1">Specific Gravity of Coarse Aggregate (SSD)</label>
                         <input type="number" id="sg_ca" value="2.74" step="0.01" class="input-field" onchange="calculateMix()">
                     </div>
+                    
+                    <div class="input-group">
+                        <label for="sg_admixture" class="block text-sm text-gray-700 mb-1">Specific Gravity of Chemical Admixture</label>
+                        <input type="number" id="sg_admixture" value="1.145" step="0.001" class="input-field" onchange="calculateMix()">
+                        <p class="text-xs text-gray-500 mt-1">Used for calculating the absolute volume of the liquid admixture.</p>
+                    </div>
 
-                    <!-- Admixture (Optional) -->
                     <div class="input-group">
                         <label for="admixture_percent" class="block text-sm text-gray-700 mb-1">Admixture Dosage (% by mass of cement)</label>
                         <input type="number" id="admixture_percent" value="1.0" step="0.01" class="input-field" onchange="calculateMix()">
                     </div>
 
-                    <!-- Free Surface Moisture & Water Absorption -->
                     <div class="input-group">
                         <label for="fa_moisture" class="block text-sm text-gray-700 mb-1">FA Free Surface Moisture (%)</label>
-                        <input type="number" id="fa_moisture" value="2.0" step="0.1" class="input-field" onchange="calculateMix()">
+                        <input type="number" id="fa_moisture" value="0.0" step="0.1" class="input-field" onchange="calculateMix()">
                     </div>
                     <div class="input-group">
                         <label for="ca_moisture" class="block text-sm text-gray-700 mb-1">CA Free Surface Moisture (%)</label>
-                        <input type="number" id="ca_moisture" value="0.5" step="0.1" class="input-field" onchange="calculateMix()">
+                        <input type="number" id="ca_moisture" value="0.0" step="0.1" class="input-field" onchange="calculateMix()">
                     </div>
                     <div class="input-group">
                         <label for="ca_absorption" class="block text-sm text-gray-700 mb-1">CA Water Absorption (%)</label>
@@ -208,12 +216,10 @@
                 </button>
             </section>
 
-            <!-- Output Column -->
             <section class="lg:col-span-1">
                 <h2 class="text-2xl font-semibold text-gray-700 border-b pb-2 mb-4">Results</h2>
                 <div id="output-card" class="bg-gray-100 p-6 rounded-lg shadow-inner space-y-4">
                     
-                    <!-- Durability Checks (NEW DISPLAY) -->
                     <h3 class="text-xl font-bold text-gray-800 border-b pb-2">IS 456 Durability Requirements</h3>
                     <p class="text-sm text-gray-600">Based on Exposure Condition (Reinforced Concrete).</p>
                     <ul class="space-y-1 bg-yellow-100 p-3 rounded-md">
@@ -222,8 +228,6 @@
                         <li>Max Water-Cement Ratio (IS 456, Table 5): <span id="max_wc_req" class="font-mono font-bold text-red-600">N/A</span></li>
                         <li class="mt-2 text-xs">W/C Ratio used for calculation (Governing): <span id="governing_wc" class="font-mono font-bold text-blue-600">N/A</span></li>
                     </ul>
-                    <!-- End Durability Checks -->
-
                     <h3 class="text-xl font-bold text-gray-800 border-t pt-2 mt-4">Design Checks & Adjustments</h3>
                     <p id="placing_warning" class="text-xs text-orange-600 mt-1 font-semibold hidden bg-orange-100 p-2 rounded"></p>
                     <p id="cement_max_warning" class="text-xs text-orange-600 mt-1 font-semibold hidden bg-orange-100 p-2 rounded"></p>
@@ -251,6 +255,11 @@
                             <li>Fine Aggregate (FA Wet): <span id="field_fa" class="font-mono bg-blue-200 px-2 py-0.5 rounded">0.0</span> kg/m³</li>
                             <li>Coarse Aggregate (CA Wet): <span id="field_ca" class="font-mono bg-blue-200 px-2 py-0.5 rounded">0.0</span> kg/m³</li>
                         </ul>
+                        
+                        <h3 class="text-xl font-bold text-gray-800 border-t pt-2 mt-4">Detailed Design Calculations</h3>
+                        <div id="detailed-calculations" class="space-y-3">
+                            <p class="text-gray-500">Run calculation to see detailed steps...</p>
+                        </div>
                     </div>
                 </div>
                 <div id="error-message" class="mt-4 p-4 bg-red-100 text-red-700 border border-red-400 rounded-lg hidden"></div>
@@ -332,6 +341,7 @@
             const S_cement = parseFloat(document.getElementById('sg_cement').value); // Specific Gravity Cement
             const S_fa = parseFloat(document.getElementById('sg_fa').value); // Specific Gravity Fine Aggregate (SSD)
             const S_ca = parseFloat(document.getElementById('sg_ca').value); // Specific Gravity Coarse Aggregate (SSD)
+            const S_admixture = parseFloat(document.getElementById('sg_admixture').value); // Specific Gravity Chemical Admixture (NEW)
             const admixturePercent = parseFloat(document.getElementById('admixture_percent').value) / 100; // Admixture %
             const faMoisture = parseFloat(document.getElementById('fa_moisture').value) / 100; // FA Free Surface Moisture
             const caMoisture = parseFloat(document.getElementById('ca_moisture').value) / 100; // CA Free Surface Moisture
@@ -342,8 +352,8 @@
             const maxCementLimit = parseFloat(document.getElementById('max_cement_content').value); // Max Cement Content Limit
 
             // Input Validation (Basic)
-            if (isNaN(fck) || fck < 10 || isNaN(msa) || isNaN(wCRatioDesign) || isNaN(S_cement) || isNaN(S_fa) || isNaN(S_ca) || wCRatioDesign <= 0 || S_cement <= 0 || S_fa <= 0 || S_ca <= 0) {
-                return displayError("Please ensure the concrete grade is M10 or higher and all primary input fields have valid positive numbers.");
+            if (isNaN(fck) || fck < 10 || isNaN(msa) || isNaN(wCRatioDesign) || isNaN(S_cement) || isNaN(S_fa) || isNaN(S_ca) || isNaN(S_admixture) || wCRatioDesign <= 0 || S_cement <= 0 || S_fa <= 0 || S_ca <= 0 || S_admixture <= 0) {
+                return displayError("Please ensure the concrete grade is M10 or higher and all primary input fields, including Specific Gravities, have valid positive numbers.");
             }
             if (!IS_456_DURABILITY_LIMITS[exposure]) {
                 return displayError(`Unknown exposure condition: ${exposure}`);
@@ -360,6 +370,9 @@
                 el.textContent = '';
             });
 
+            // Variable to build detailed calculations HTML
+            let calcDetails = '';
+
 
             // --- DURABILITY CHECK (IS 456, Table 5) ---
             const durabilityLimits = IS_456_DURABILITY_LIMITS[exposure];
@@ -372,13 +385,7 @@
             document.getElementById('min_cement_req').textContent = min_cement_req;
             document.getElementById('max_wc_req').textContent = max_wc_req.toFixed(2);
 
-            // --- CONCRETE GRADE CODE COMPLIANCE CHECK ---
-            if (fck < min_grade_req) {
-                gradeWarningElement.textContent = `Input Grade M${fck} is below the minimum required grade (M${min_grade_req}) for ${exposure} exposure (IS 456, Table 5). Increase concrete grade for durability compliance.`;
-                gradeWarningElement.classList.remove('hidden');
-            }
-
-
+            let wc_check_message = '';
             // --- W/C RATIO CODE COMPLIANCE CHECK ---
             let wCRatioGoverning = wCRatioDesign;
             if (wCRatioDesign > max_wc_req) {
@@ -386,123 +393,128 @@
                 wcWarningElement.textContent = warningMessage;
                 wcWarningElement.classList.remove('hidden');
                 
-                // Use the code-compliant limit for calculation
                 wCRatioGoverning = max_wc_req;
+                wc_check_message = `(Design W/C ${wCRatioDesign.toFixed(2)} > Max W/C ${max_wc_req.toFixed(2)}). Max W/C is adopted.`;
             } else {
                 wCRatioGoverning = Math.min(wCRatioDesign, max_wc_req);
+                wc_check_message = `(Design W/C ${wCRatioDesign.toFixed(2)} is less than Max W/C ${max_wc_req.toFixed(2)}). Design W/C is adopted.`;
             }
-            
-            // Display Governing W/C
             document.getElementById('governing_wc').textContent = wCRatioGoverning.toFixed(3);
 
 
-            // --- PLACING METHOD/WORKABILITY CHECK ---
-            let placementWarning = '';
-            if (placingMethod === 'Pumpable') {
-                if (requiredSlump < 75) {
-                    placementWarning += `WARNING: For Pumpable Concrete, the required slump should typically be greater than 75 mm (often 100 mm or more) for smooth operation. Current slump: ${requiredSlump} mm.`;
-                }
-                
-                if (msa > 20) {
-                    placementWarning += (placementWarning ? ' | ' : '') + `NOTE: For pumping, 20 mm MSA is often preferred over 40 mm to reduce blockages. Current MSA: ${msa} mm.`;
-                }
-            }
-
-            if (placementWarning) {
-                placingWarningElement.textContent = placementWarning;
-                placingWarningElement.classList.remove('hidden');
-            }
-
-
             // --- STEP 1: Target Mean Strength ($f'_{ck}$) ---
-            
-            // Determine S based on fck (Table 8, IS 456 / IS 10262)
             let S = STANDARD_DEVIATION[fck.toString()];
-            if (!S) {
-                S = (fck >= 30) ? 5.0 : 4.0; 
-                console.warn(`Standard Deviation (S) for M${fck} is not explicitly defined in map. Using S = ${S} MPa.`);
-            }
-
+            if (!S) { S = (fck >= 30) ? 5.0 : 4.0; }
             const fck_target = fck + (1.65 * S);
             document.getElementById('target-strength-display').textContent = `Target Strength ($f'_{ck}$): ${round(fck_target)} MPa`;
 
-            // --- STEP 3: Water Content (for 100mm slump, then adjust) ---
-            let water_content_initial = INITIAL_WATER_CONTENT[msa.toString()];
-            if (!water_content_initial) {
-                return displayError(`Initial water content not found for MSA ${msa}mm. Please check IS 10262 Table 4.`);
-            }
+            calcDetails += `<div class="calculation-step">
+                <h4>1. Target Mean Strength ($f'_{ck}$)</h4>
+                <p>Formula: $f'_{ck} = f_{ck} + 1.65 \\times S$</p>
+                <p>Where $f_{ck} = ${fck} \text{ MPa}$ and $S = ${S} \text{ MPa}$ (Standard Deviation for M${fck}$).</p>
+                <p>Calculation: $40 + 1.65 \\times ${S} = \\mathbf{${round(fck_target).toFixed(2)}} \text{ MPa}$</p>
+            </div>`;
 
-            // 3a. Aggregate Type Correction (IS 10262:2019 Table 4 footnote)
+
+            // --- STEP 2: Determine Water Content and Cement Content ---
+            
+            calcDetails += `<div class="calculation-step">
+                <h4>2. Determination of Cement Content</h4>
+                
+                <p>Initial Water (from IS 10262 Table 4 for ${msa}mm MSA, 25-50mm slump): <span class="res">${INITIAL_WATER_CONTENT[msa.toString()]} \text{ kg/m}^3$</span></p>
+                <p>Correction for ${aggregateType}: ${AGGREGATE_WATER_CORRECTION[aggregateType]} \text{ kg/m}^3$</p>`;
+            
+            const water_content_initial = INITIAL_WATER_CONTENT[msa.toString()];
             const agg_correction = AGGREGATE_WATER_CORRECTION[aggregateType] || 0;
             let water_content_base = water_content_initial + agg_correction;
+            
+            calcDetails += `<p>Base Water Content ($\text{W}_{base}$): ${water_content_initial} + ${agg_correction} = <span class="res">${water_content_base.toFixed(2)} \text{ kg/m}^3$</span></p>`;
 
-            // 3b. Slump Correction: For every 25mm difference from 50mm slump (Base for 20mm MSA is 186 kg/m³ for 50mm slump, then 3% per 25mm)
-            // NOTE: Table 4 in IS 10262 is for 25-50mm slump. We assume the average of 37.5mm is the base or use 50mm as a standard base for simple calculation.
-            // Using 50mm as the base for simplicity.
+            // Slump Correction
             const slump_base_calc = 50; 
             const slump_difference = requiredSlump - slump_base_calc;
             const slump_correction_factor = 1 + (slump_difference / 25) * 0.03;
-            
-            let water_content = water_content_base * slump_correction_factor;
+            let water_content_slump = water_content_base * slump_correction_factor;
 
-            // 3c. Admixture Water Reduction (Assumed 15% reduction for Superplasticizer, for illustration only)
-            // Since we use Admixture %, we assume the W/C ratio chosen already incorporates this.
-            // However, for consistency with IS steps, we show the reduction step here, assuming a typical 15% reduction for 1% admixture use.
-            let water_reduction_percent = admixturePercent > 0 ? 0.15 : 0; // Simple approximation
-            
-            // NOTE: In actual design, the user uses the manufacturer's data (e.g., 20% reduction) to input the W/C ratio.
-            // Here, we calculate water based on the table, and then reduce it based on the admixture dosage.
+            calcDetails += `<p>Slump Correction (3% per 25mm $\Delta$ Slump): Factor $1 + ((${requiredSlump} - 50)/25) \\times 0.03 = ${round(slump_correction_factor, 3)} \text{ (Factor)}$</p>
+                            <p>Water Content after Slump Correction: ${water_content_base.toFixed(2)} \\times ${round(slump_correction_factor, 3)} = <span class="res">${water_content_slump.toFixed(2)} \text{ kg/m}^3$</span></p>`;
+
+            // Admixture Reduction
+            let water_reduction_percent = 0;
+            let water_content_net = water_content_slump;
             if (admixturePercent > 0) {
-                 water_reduction_percent = 0.05 + Math.min(admixturePercent, 2.0) * 0.05; // 5% + 5% per 1% dosage, max 15%
-                 water_content = water_content * (1 - water_reduction_percent);
+                 water_reduction_percent = 0.05 + Math.min(admixturePercent, 2.0) * 0.05; 
+                 water_content_net = water_content_slump * (1 - water_reduction_percent);
+                 calcDetails += `<p>Admixture Water Reduction (approx. 5% + 5% per 1% dosage): ${round(water_reduction_percent * 100, 2)} \text{ \%}$</p>
+                                 <p>Water Content ($\text{W}_{net}$) after Admixture: ${water_content_slump.toFixed(2)} \\times (1 - ${round(water_reduction_percent, 4)}) = <span class="res">${round(water_content_net).toFixed(1)} \text{ kg/m}^3$</span></p>`;
+            } else {
+                 calcDetails += `<p>Admixture Reduction: $0\%$. $\text{W}_{net} = ${round(water_content_net).toFixed(1)} \text{ kg/m}^3$</p>`;
             }
 
 
-            // --- STEP 4: Cement Content ---
-            
-            let cement_content = water_content / wCRatioGoverning;
+            // Cement Content
+            let cement_content = water_content_net / wCRatioGoverning;
+            let final_cement_content = cement_content;
+            let cement_check_message = '';
 
-            // Check Minimum Cement Requirement (Durability)
-            if (cement_content < min_cement_req) {
-                cement_content = min_cement_req;
+            calcDetails += `<p>Governing W/C Ratio ($\text{WCR}_{gov}$): <span class="res">${wCRatioGoverning.toFixed(3)}</span> ${wc_check_message}</p>
+                            <p>Initial Cement Content ($C_{initial} = \text{W}_{net} / \text{WCR}_{gov}$): ${round(water_content_net).toFixed(1)} / ${wCRatioGoverning.toFixed(3)} = <span class="res">${round(cement_content).toFixed(1)} \text{ kg/m}^3$</span></p>`;
+
+            // Check Minimum Cement
+            if (final_cement_content < min_cement_req) {
+                final_cement_content = min_cement_req;
+                cement_check_message += `Initial $C$ (${round(cement_content).toFixed(1)}$) is less than Min $C$ (${min_cement_req}$). Min $C$ is adopted.`;
             }
 
-            // Check Maximum Cement Requirement (Hard Limit)
-            if (cement_content > maxCementLimit) {
-                maxCementWarningElement.textContent = `WARNING: Calculated Cement Content (${round(cement_content).toFixed(1)} kg/m³) exceeds the specified Maximum Limit (${maxCementLimit} kg/m³). Using Max Limit for calculation.`;
+            // Check Maximum Cement
+            if (final_cement_content > maxCementLimit) {
+                maxCementWarningElement.textContent = `WARNING: Calculated Cement Content (${round(final_cement_content).toFixed(1)} kg/m³) exceeds the specified Maximum Limit (${maxCementLimit} kg/m³). Using Max Limit for calculation.`;
                 maxCementWarningElement.classList.remove('hidden');
-                cement_content = maxCementLimit;
-                // Recalculate water content based on the new cement content and governing W/C ratio
-                water_content = cement_content * wCRatioGoverning;
+                final_cement_content = maxCementLimit;
+                cement_check_message += `Calculated $C$ (${round(cement_content).toFixed(1)}$) exceeds Max $C$ (${maxCementLimit}$). Max $C$ is adopted.`;
             }
 
-            // Display net water content used (after all corrections)
-            document.getElementById('res_water_net').textContent = round(water_content).toFixed(1);
+            // Recalculate W_net if cement was capped
+            let final_water_content = water_content_net;
+            if (final_cement_content !== cement_content) {
+                // If cement was adjusted by a limit, water must be recalculated to maintain W/C = 0.40
+                final_water_content = final_cement_content * wCRatioGoverning;
+            }
+
+            const admixture_content = final_cement_content * admixturePercent;
+
+            calcDetails += `<p>Cement Content Check: ${cement_check_message}</p>
+                            <p><strong>Final Cement Content (C):</strong> <span class="res">${round(final_cement_content).toFixed(1)} \text{ kg/m}^3$</span></p>
+                            <p><strong>Final Net Water ($\text{W}_{net}$):</strong> ${round(final_cement_content).toFixed(1)} \\times ${wCRatioGoverning.toFixed(3)} = <span class="res">${round(final_water_content).toFixed(1)} \text{ kg/m}^3$</span></p>
+                            <p><strong>Admixture Content (Ad):</strong> ${round(final_cement_content).toFixed(1)} \\times ${round(admixturePercent, 4)} = <span class="res">${round(admixture_content).toFixed(3)} \text{ kg/m}^3$</span></p>
+            </div>`;
 
 
-            // --- STEP 5: Admixture Content (based on cement) ---
-            const admixture_content = cement_content * admixturePercent;
-
-            // --- STEP 6: Calculate Volume of Concrete Constituents ---
-            const V_c = (cement_content / S_cement) * (1 / 1000);
-            const V_w = (water_content / 1.0) * (1 / 1000); 
-            const S_admixture = 1.1; // Assumed SG for liquid admixture
+            // --- STEP 3: Aggregate Volumes (Absolute Volume Method) ---
+            
+            const V_c = (final_cement_content / S_cement) * (1 / 1000);
+            const V_w = (final_water_content / 1.0) * (1 / 1000); 
             const V_ad = (admixture_content / S_admixture) * (1 / 1000);
-
             const V_non_agg = V_c + V_w + V_ad;
             const V_agg = 1.0 - V_non_agg;
+
+            calcDetails += `<div class="calculation-step">
+                <h4>3. Absolute Volume Calculation (SSD)</h4>
+                <p>Volume (V) = Mass / (SG \\times 1000)</p>
+                <p> $V_c$: ${round(final_cement_content).toFixed(1)} / (${S_cement} \\times 1000) = <span class="res">${round(V_c, 5).toFixed(5)} \text{ m}^3$</span></p>
+                <p> $V_w$: ${round(final_water_content).toFixed(1)} / (1.00 \\times 1000) = <span class="res">${round(V_w, 5).toFixed(5)} \text{ m}^3$</span></p>
+                <p> $V_{ad}$: ${round(admixture_content).toFixed(3)} / (${S_admixture} \\times 1000) = <span class="res">${round(V_ad, 5).toFixed(5)} \text{ m}^3$</span></p>
+                <p> $V_{non\_agg}$: ${round(V_c, 5).toFixed(5)} + ${round(V_w, 5).toFixed(5)} + ${round(V_ad, 5).toFixed(5)} = <span class="res">${round(V_non_agg, 5).toFixed(5)} \text{ m}^3$</span></p>
+                <p><strong>Total Aggregate Volume ($\mathbf{V_{agg}}$):</strong> $1.0 - V_{non\_agg} = \\mathbf{${round(V_agg, 5).toFixed(5)} \text{ m}^3$}</p>
+            </div>`;
             
             if (V_agg <= 0) {
                  return displayError("Volume of aggregates is zero or negative. Check your inputs (e.g., low SG, high cement/water).");
             }
 
 
-            // --- STEP 7: Determine Volume Fractions of Aggregates ---
+            // --- STEP 4: Determine Volume Fractions of Aggregates ---
             const CA_FRACTION_MAP = CA_VOLUME_FRACTION[msa.toString()];
-            if (!CA_FRACTION_MAP) {
-                return displayError(`CA Volume Fraction data not found for MSA ${msa}mm.`);
-            }
-            
             const keys = Object.keys(CA_FRACTION_MAP).map(Number).sort((a, b) => a - b);
             let Vca_Vt_ratio; 
 
@@ -527,38 +539,76 @@
             const V_ca = V_agg * Vca_Vt_ratio;
             const V_fa = V_agg - V_ca;
 
-            // --- STEP 8: Calculate SSD Masses (kg/m³) ---
+            calcDetails += `<div class="calculation-step">
+                <h4>4. Individual Aggregate Volumes and SSD Mass</h4>
+                <p>Volume of CA to Total Aggregate ($\mathbf{V_{ca}/V_{t}}$) from IS 10262 Table 5 (MSA ${msa}mm, W/C ${wCRatioGoverning.toFixed(2)}$): <span class="res">${round(Vca_Vt_ratio, 3).toFixed(3)}</span></p>
+                <p>Volume of CA ($V_{ca}$): $V_{agg} \\times V_{ca}/V_{t} = ${round(V_agg, 5).toFixed(5)} \\times ${round(Vca_Vt_ratio, 3).toFixed(3)} = <span class="res">${round(V_ca, 5).toFixed(5)} \text{ m}^3$</span></p>
+                <p>Volume of FA ($V_{fa}$): $V_{agg} - V_{ca} = ${round(V_agg, 5).toFixed(5)} - ${round(V_ca, 5).toFixed(5)} = <span class="res">${round(V_fa, 5).toFixed(5)} \text{ m}^3$</span></p>
+            </div>`;
+
+            // --- STEP 5: Calculate SSD Masses (kg/m³) ---
             const CA_mass_ssd = V_ca * S_ca * 1000;
             const FA_mass_ssd = V_fa * S_fa * 1000;
-
-            // --- STEP 9: Moisture Correction (Field Quantities) ---
-            const fa_water_correction = (faMoisture - faAbsorption) * FA_mass_ssd;
-            const ca_water_correction = (caMoisture - caAbsorption) * CA_mass_ssd;
-            const total_water_correction = fa_water_correction + ca_water_correction;
-
-            const water_mass_adjusted = water_content - total_water_correction;
             
+            calcDetails += `<div class="calculation-step">
+                <h4>5. Required SSD Masses</h4>
+                <p>Mass = Volume \\times SG \\times 1000</p>
+                <p><strong>Coarse Aggregate ($M_{ca}$ SSD):</strong> ${round(V_ca, 5).toFixed(5)} \\times ${S_ca} \\times 1000 = <span class="res">${round(CA_mass_ssd).toFixed(1)} \text{ kg/m}^3$</span></p>
+                <p><strong>Fine Aggregate ($M_{fa}$ SSD):</strong> ${round(V_fa, 5).toFixed(5)} \\times ${S_fa} \\times 1000 = <span class="res">${round(FA_mass_ssd).toFixed(1)} \text{ kg/m}^3$</span></p>
+            </div>`;
+
+
+            // --- STEP 6: Moisture Correction (Field Quantities) ---
+            const fa_water_correction_needed = (faAbsorption - faMoisture) * FA_mass_ssd; // Water needed by FA (negative if FSM > WA)
+            const ca_water_correction_needed = (caAbsorption - caMoisture) * CA_mass_ssd; // Water needed by CA
+
+            const total_water_correction = -(fa_water_correction_needed + ca_water_correction_needed); // Total water correction to apply to batched water
+
+            const water_mass_adjusted = final_water_content + total_water_correction;
+            
+            // Field aggregate masses are the SSD mass plus the FSM
             const CA_mass_field = CA_mass_ssd * (1 + caMoisture);
             const FA_mass_field = FA_mass_ssd * (1 + faMoisture);
+
+            const fa_correction_kg = faMoisture * FA_mass_ssd;
+            const ca_correction_kg = caMoisture * CA_mass_ssd;
             
-            // --- STEP 10: Display Results ---
+            calcDetails += `<div class="calculation-step">
+                <h4>6. Moisture Correction and Field Quantities</h4>
+                <p>Water Absorption (WA): CA ${caAbsorption*100}\%, FA ${faAbsorption*100}\%</p>
+                <p>Free Surface Moisture (FSM): CA ${caMoisture*100}\%, FA ${faMoisture*100}\%</p>
+                <p>Water in FA (FSM): ${round(FA_mass_ssd).toFixed(1)} \\times ${faMoisture.toFixed(3)} = ${round(fa_correction_kg).toFixed(2)} \text{ kg}$</p>
+                <p>Water in CA (FSM): ${round(CA_mass_ssd).toFixed(1)} \\times ${caMoisture.toFixed(3)} = ${round(ca_correction_kg).toFixed(2)} \text{ kg}$</p>
+                
+                <p>Total Water Correction ($\Delta W$): $-((\text{FSM}_{fa} - \text{WA}_{fa})M_{fa} + (\text{FSM}_{ca} - \text{WA}_{ca})M_{ca})$</p>
+                <p>Calculation: $-((${faMoisture.toFixed(3)} - ${faAbsorption.toFixed(3)}) \times ${round(FA_mass_ssd).toFixed(1)} + (${caMoisture.toFixed(3)} - ${caAbsorption.toFixed(3)}) \times ${round(CA_mass_ssd).toFixed(1)})$</p>
+                <p> $\Delta W$: <span class="res">${round(total_water_correction).toFixed(2)} \text{ kg}$</span></p>
+                
+                <p><strong>Batched Water ($W_{field}$):</strong> $W_{net} + \Delta W = ${round(final_water_content).toFixed(1)} + ${round(total_water_correction).toFixed(2)} = <span class="res">${round(water_mass_adjusted).toFixed(1)} \text{ kg/m}^3$</span></p>
+                <p><strong>Batched FA Mass ($\mathbf{M_{fa}}$ Wet):</strong> ${round(FA_mass_ssd).toFixed(1)} \\times (1 + ${faMoisture.toFixed(3)}) = <span class="res">${round(FA_mass_field).toFixed(1)} \text{ kg/m}^3$</span></p>
+                <p><strong>Batched CA Mass ($\mathbf{M_{ca}}$ Wet):</strong> ${round(CA_mass_ssd).toFixed(1)} \\times (1 + ${caMoisture.toFixed(3)}) = <span class="res">${round(CA_mass_field).toFixed(1)} \text{ kg/m}^3$</span></p>
+            </div>`;
+
+
+            // --- STEP 7: Display Results ---
 
             // Display SSD Results
-            document.getElementById('res_cement').textContent = round(cement_content).toFixed(1);
-            document.getElementById('res_water').textContent = round(water_content).toFixed(1);
+            document.getElementById('res_cement').textContent = round(final_cement_content).toFixed(1);
+            document.getElementById('res_water').textContent = round(final_water_content).toFixed(1);
             document.getElementById('res_fa').textContent = round(FA_mass_ssd).toFixed(1);
             document.getElementById('res_ca').textContent = round(CA_mass_ssd).toFixed(1);
             document.getElementById('res_admixture').textContent = round(admixture_content).toFixed(3);
 
             // Display Field (Corrected) Results
-            document.getElementById('field_cement').textContent = round(cement_content).toFixed(1); // Cement is batched dry
+            document.getElementById('field_cement').textContent = round(final_cement_content).toFixed(1); // Cement is batched dry
             document.getElementById('field_water').textContent = round(Math.max(0, water_mass_adjusted)).toFixed(1);
             document.getElementById('field_fa').textContent = round(FA_mass_field).toFixed(1);
             document.getElementById('field_ca').textContent = round(CA_mass_field).toFixed(1);
+            document.getElementById('res_water_net').textContent = round(final_water_content).toFixed(1);
 
-            // Optional: Display Mix Ratio (C:FA:CA) by mass
-            const ratio_fa = FA_mass_ssd / cement_content;
-            const ratio_ca = CA_mass_ssd / cement_content;
+            // Mix Ratio
+            const ratio_fa = FA_mass_ssd / final_cement_content;
+            const ratio_ca = CA_mass_ssd / final_cement_content;
             const mix_ratio_text = `Mix Ratio (C:FA:CA) approx 1 : ${round(ratio_fa).toFixed(2)} : ${round(ratio_ca).toFixed(2)}`;
             let ratioElement = document.getElementById('output-final-mix').querySelector('.mix-ratio');
             if (!ratioElement) {
@@ -567,6 +617,9 @@
                 ratioElement = document.getElementById('output-final-mix').appendChild(p);
             }
             ratioElement.textContent = mix_ratio_text;
+
+            // Inject detailed calculations
+            document.getElementById('detailed-calculations').innerHTML = calcDetails;
         }
 
         // Run calculation on load with default values
