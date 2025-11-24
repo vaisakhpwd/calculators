@@ -43,7 +43,7 @@
             <p class="mt-2 text-lg text-gray-600">Calculate material proportions (kg/m³) for 1 cubic meter of concrete.</p>
         </header>
 
-        <main class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <main class="grid grid-cols-1 lg:col-span-3 gap-8">
             <!-- Inputs Column -->
             <section class="lg:col-span-2 space-y-6">
                 <h2 class="text-2xl font-semibold text-gray-700 border-b pb-2 mb-4">Input Parameters</h2>
@@ -55,6 +55,8 @@
                         <label for="grade" class="block text-sm text-gray-700 mb-1">Concrete Grade ($f_{ck}$)</label>
                         <input type="number" id="grade" value="30" min="10" step="5" class="input-field" onchange="calculateMix()">
                         <p class="text-xs text-gray-500 mt-1">Required characteristic compressive strength at 28 days (MPa).</p>
+                        <!-- Warning Area for Grade -->
+                        <p id="grade_warning" class="text-xs text-red-600 mt-1 font-semibold hidden"></p>
                     </div>
                     
                     <!-- 1.5. Type of Cement -->
@@ -104,6 +106,16 @@
                         <p class="text-xs text-gray-500 mt-1">Determines initial water content.</p>
                     </div>
 
+                    <!-- 2.5. Method of Placing (NEW) -->
+                    <div class="input-group">
+                        <label for="placing_method" class="block text-sm text-gray-700 mb-1">Method of Placing</label>
+                        <select id="placing_method" class="input-field bg-white" onchange="calculateMix()">
+                            <option value="NonPumpable" selected>Non-Pumpable (Conventional)</option>
+                            <option value="Pumpable">Pumpable</option>
+                        </select>
+                        <p class="text-xs text-gray-500 mt-1">Affects workability (slump) requirement and max aggregate size recommendations.</p>
+                    </div>
+                    
                     <!-- 3. Slump/Workability -->
                     <div class="input-group">
                         <label for="slump" class="block text-sm text-gray-700 mb-1">Required Slump/Workability (mm)</label>
@@ -164,11 +176,16 @@
                     <h3 class="text-xl font-bold text-gray-800 border-b pb-2">IS 456 Durability Requirements</h3>
                     <p class="text-sm text-gray-600">Based on Exposure Condition (Reinforced Concrete).</p>
                     <ul class="space-y-1 bg-yellow-100 p-3 rounded-md">
+                        <li>Min Grade (IS 456, Table 5): <span id="min_grade_req_display" class="font-mono font-bold text-red-600">N/A</span></li>
                         <li>Min Cement Content (IS 456, Table 5): <span id="min_cement_req" class="font-mono font-bold text-red-600">N/A</span> kg/m³</li>
                         <li>Max Water-Cement Ratio (IS 456, Table 5): <span id="max_wc_req" class="font-mono font-bold text-red-600">N/A</span></li>
                         <li class="mt-2 text-xs">W/C Ratio used for calculation (Governing): <span id="governing_wc" class="font-mono font-bold text-blue-600">N/A</span></li>
                     </ul>
                     <!-- End Durability Checks -->
+
+                    <h3 class="text-xl font-bold text-gray-800 border-t pt-2 mt-4">Placement/Workability Check</h3>
+                    <p id="placing_warning" class="text-xs text-orange-600 mt-1 font-semibold hidden bg-orange-100 p-2 rounded"></p>
+                    
 
                     <p id="target-strength-display" class="font-medium text-lg text-green-700 border-t pt-4">Target Strength ($f'_{ck}$): N/A</p>
 
@@ -289,6 +306,8 @@
             const caMoisture = parseFloat(document.getElementById('ca_moisture').value) / 100; // CA Free Surface Moisture
             const caAbsorption = parseFloat(document.getElementById('ca_absorption').value) / 100; // CA Water Absorption
             const faAbsorption = parseFloat(document.getElementById('fa_absorption').value) / 100; // FA Water Absorption
+            const placingMethod = document.getElementById('placing_method').value; // Placing Method (Pumpable/Non-Pumpable)
+
 
             // Input Validation (Basic)
             if (isNaN(fck) || fck < 10 || isNaN(msa) || isNaN(wCRatioDesign) || isNaN(S_cement) || isNaN(S_fa) || isNaN(S_ca) || wCRatioDesign <= 0 || S_cement <= 0 || S_fa <= 0 || S_ca <= 0) {
@@ -298,22 +317,40 @@
                 return displayError(`Unknown exposure condition: ${exposure}`);
             }
 
-            // Reset W/C Warning
+            // Reset Warnings
             const wcWarningElement = document.getElementById('wc_ratio_warning');
             wcWarningElement.classList.add('hidden');
             wcWarningElement.textContent = '';
+            
+            const gradeWarningElement = document.getElementById('grade_warning');
+            gradeWarningElement.classList.add('hidden');
+            gradeWarningElement.textContent = '';
+
+            const placingWarningElement = document.getElementById('placing_warning');
+            placingWarningElement.classList.add('hidden');
+            placingWarningElement.textContent = '';
 
 
             // --- DURABILITY CHECK (IS 456, Table 5) ---
             const durabilityLimits = IS_456_DURABILITY_LIMITS[exposure];
             const min_cement_req = durabilityLimits.min_cement;
             const max_wc_req = durabilityLimits.max_wc;
+            const min_grade_req = durabilityLimits.min_grade;
             
-            // Display Durability Limits
+            // Display Durability Limits in Output
+            document.getElementById('min_grade_req_display').textContent = `M${min_grade_req}`;
             document.getElementById('min_cement_req').textContent = min_cement_req;
             document.getElementById('max_wc_req').textContent = max_wc_req.toFixed(2);
 
-            // --- W/C RATIO CODE COMPLIANCE CHECK (NEW) ---
+            // --- CONCRETE GRADE CODE COMPLIANCE CHECK ---
+            if (fck < min_grade_req) {
+                const warningMessage = `Input Grade M${fck} is below the minimum required grade (M${min_grade_req}) for ${exposure} exposure (IS 456, Table 5). Increase concrete grade for durability compliance.`;
+                gradeWarningElement.textContent = warningMessage;
+                gradeWarningElement.classList.remove('hidden');
+            }
+
+
+            // --- W/C RATIO CODE COMPLIANCE CHECK ---
             let wCRatioGoverning = wCRatioDesign;
             if (wCRatioDesign > max_wc_req) {
                 const warningMessage = `Input W/C Ratio (${wCRatioDesign.toFixed(2)}) exceeds the maximum permitted W/C Ratio (${max_wc_req.toFixed(2)}) for ${exposure} exposure (IS 456, Table 5). The calculation proceeds using the code-compliant limit of ${max_wc_req.toFixed(2)}.`;
@@ -323,12 +360,30 @@
                 // Use the code-compliant limit for calculation
                 wCRatioGoverning = max_wc_req;
             } else {
-                // Determine Governing W/C Ratio: lower of Max Req or Design Target (though we checked the violation above)
+                // Determine Governing W/C Ratio: lower of Max Req or Design Target 
                 wCRatioGoverning = Math.min(wCRatioDesign, max_wc_req);
             }
             
             // Display Governing W/C
             document.getElementById('governing_wc').textContent = wCRatioGoverning.toFixed(3);
+
+
+            // --- PLACING METHOD/WORKABILITY CHECK ---
+            let placementWarning = '';
+            if (placingMethod === 'Pumpable') {
+                if (requiredSlump < 75) {
+                    placementWarning += `WARNING: For Pumpable Concrete, the required slump should typically be greater than 75 mm (often 100 mm or more) for smooth operation. Current slump: ${requiredSlump} mm.`;
+                }
+                
+                if (msa > 20) {
+                    placementWarning += (placementWarning ? ' | ' : '') + `NOTE: For pumping applications, 20 mm MSA is often preferred over 40 mm to reduce the risk of blockages, although 40 mm is technically pumpable with correct mix design and equipment. Current MSA: ${msa} mm.`;
+                }
+            }
+
+            if (placementWarning) {
+                placingWarningElement.textContent = placementWarning;
+                placingWarningElement.classList.remove('hidden');
+            }
 
 
             // --- STEP 1: Target Mean Strength ($f'_{ck}$) ---
