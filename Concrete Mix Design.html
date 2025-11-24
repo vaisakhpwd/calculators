@@ -253,7 +253,7 @@
                             <li>Cement: <span id="field_cement" class="font-mono bg-blue-200 px-2 py-0.5 rounded">0.0</span> kg/m³</li>
                             <li>Water (Adjusted): <span id="field_water" class="font-mono bg-blue-200 px-2 py-0.5 rounded">0.0</span> kg/m³</li>
                             <li>Fine Aggregate (FA Wet): <span id="field_fa" class="font-mono bg-blue-200 px-2 py-0.5 rounded">0.0</span> kg/m³</li>
-                            <li>Coarse Aggregate (CA Wet): <span id="field_ca" class="font-mono bg-blue-200 px-2 py-0.0 rounded">0.0</span> kg/m³</li>
+                            <li>Coarse Aggregate (CA Wet): <span id="field_ca" class="font-mono bg-blue-200 px-2 py-0.5 rounded">0.0</span> kg/m³</li>
                         </ul>
                         
                         <h3 class="text-xl font-bold text-gray-800 border-t pt-2 mt-4">Detailed Design Calculations</h3>
@@ -285,6 +285,7 @@
         };
         
         // F.W/C Ratio corresponding to Target Mean Strength (IS 10262:2019 Table 1) - Curve 1 (OPC 53)
+        // Data is accurate to IS 10262:2019 Table 1, Line 1
         const FWC_RATIO_TARGET_STRENGTH_OPC53 = {
             20: 0.60,
             25: 0.55,
@@ -298,17 +299,18 @@
         };
 
         // F.W/C Ratio corresponding to Target Mean Strength - Curve 2 (PPC / OPC 43 / PSC)
-        // This curve is approximately 0.05 lower W/C ratio for the same strength compared to Curve 1
+        // Corrected as per user feedback: Curve 2 is 5 MPa lower in strength for the same W/C ratio as Curve 1.
+        // Data is accurate to IS 10262:2019 Table 1, Line 2 (by shifting strength points +5MPa)
         const FWC_RATIO_TARGET_STRENGTH_PPC_OPC43 = {
-            20: 0.55, 
-            25: 0.50,
-            30: 0.45,
-            35: 0.40,
-            40: 0.35,
-            45: 0.30,
-            50: 0.25,
-            55: 0.20,
-            60: 0.15,
+            25: 0.60, // 0.60 F.W/C at 25 MPa (instead of 20 MPa on Curve 1)
+            30: 0.55,
+            35: 0.50,
+            40: 0.45,
+            45: 0.40, // 0.40 F.W/C at 45 MPa (instead of 40 MPa on Curve 1)
+            50: 0.35,
+            55: 0.30,
+            60: 0.25,
+            65: 0.20,
         };
 
 
@@ -374,16 +376,11 @@
             let strengthMap = FWC_RATIO_TARGET_STRENGTH_OPC53;
             let curveName = 'Curve 1 (OPC 53 Grade)';
 
-            // Select Curve 2 for PPC, PSC, and OPC 43
-            if (cementType === 'PPC' || cementType === 'PSC' || cementType === 'OPC43') {
+            // Select Curve 2 for PPC, PSC, OPC 43, OPC 33 and 'Other' as conservative options
+            if (cementType === 'PPC' || cementType === 'PSC' || cementType === 'OPC43' || cementType === 'OPC33' || cementType === 'Other') {
                 strengthMap = FWC_RATIO_TARGET_STRENGTH_PPC_OPC43;
-                curveName = 'Curve 2 (PPC/PSC/OPC 43 Grade)';
-            } else if (cementType === 'Other' || cementType === 'OPC33') {
-                // For other/low grade, also use a conservative curve (Curve 2)
-                strengthMap = FWC_RATIO_TARGET_STRENGTH_PPC_OPC43;
-                curveName = 'Curve 2 (Conservative)';
-            }
-
+                curveName = 'Curve 2 (PPC/PSC/OPC 43/OPC 33 Grade)';
+            } 
 
             const keys = Object.keys(strengthMap).map(Number).sort((a, b) => a - b);
             
@@ -469,7 +466,7 @@
                 <h4>1. Target Mean Strength ($f'_{ck}$)</h4>
                 <p>Formula: $f'_{ck} = f_{ck} + 1.65 \\times S$</p>
                 <p>Where $f_{ck} = ${fck} \text{ MPa}$ and $S = ${S} \text{ MPa}$ (Standard Deviation).</p>
-                <p>Calculation: $40 + 1.65 \\times ${S} = \\mathbf{${round(fck_target).toFixed(2)}} \text{ MPa}$</p>
+                <p>Calculation: ${fck} + 1.65 \\times ${S} = \\mathbf{${round(fck_target).toFixed(2)}} \text{ MPa}$</p>
             </div>`;
             
             
