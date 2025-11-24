@@ -85,7 +85,7 @@
                             <option value="PSC">Portland Slag Cement (PSC) (IS 455)</option>
                             <option value="Other">Other</option>
                         </select>
-                        <p class="text-xs text-gray-500 mt-1">Used for durability and minimum cement content checks (IS 456).</p>
+                        <p class="text-xs text-gray-500 mt-1">Used to determine the appropriate F.W/C ratio curve (Table 1/Curve 2 for PPC).</p>
                     </div>
 
                     <div class="input-group">
@@ -253,7 +253,7 @@
                             <li>Cement: <span id="field_cement" class="font-mono bg-blue-200 px-2 py-0.5 rounded">0.0</span> kg/m³</li>
                             <li>Water (Adjusted): <span id="field_water" class="font-mono bg-blue-200 px-2 py-0.5 rounded">0.0</span> kg/m³</li>
                             <li>Fine Aggregate (FA Wet): <span id="field_fa" class="font-mono bg-blue-200 px-2 py-0.5 rounded">0.0</span> kg/m³</li>
-                            <li>Coarse Aggregate (CA Wet): <span id="field_ca" class="font-mono bg-blue-200 px-2 py-0.5 rounded">0.0</span> kg/m³</li>
+                            <li>Coarse Aggregate (CA Wet): <span id="field_ca" class="font-mono bg-blue-200 px-2 py-0.0 rounded">0.0</span> kg/m³</li>
                         </ul>
                         
                         <h3 class="text-xl font-bold text-gray-800 border-t pt-2 mt-4">Detailed Design Calculations</h3>
@@ -284,9 +284,8 @@
             '50': 5.0,
         };
         
-        // F.W/C Ratio corresponding to Target Mean Strength (IS 10262:2019 Table 1)
-        // This is used for interpolation.
-        const FWC_RATIO_TARGET_STRENGTH = {
+        // F.W/C Ratio corresponding to Target Mean Strength (IS 10262:2019 Table 1) - Curve 1 (OPC 53)
+        const FWC_RATIO_TARGET_STRENGTH_OPC53 = {
             20: 0.60,
             25: 0.55,
             30: 0.50,
@@ -296,6 +295,20 @@
             50: 0.30,
             55: 0.25,
             60: 0.20,
+        };
+
+        // F.W/C Ratio corresponding to Target Mean Strength - Curve 2 (PPC / OPC 43 / PSC)
+        // This curve is approximately 0.05 lower W/C ratio for the same strength compared to Curve 1
+        const FWC_RATIO_TARGET_STRENGTH_PPC_OPC43 = {
+            20: 0.55, 
+            25: 0.50,
+            30: 0.45,
+            35: 0.40,
+            40: 0.35,
+            45: 0.30,
+            50: 0.25,
+            55: 0.20,
+            60: 0.15,
         };
 
 
@@ -352,27 +365,42 @@
         }
 
         /**
-         * Interpolates the required FWC Ratio based on the target strength fck_target.
+         * Interpolates the required FWC Ratio based on the target strength fck_target and cement type.
          * @param {number} fck_target The calculated target mean strength (fck + 1.65*S).
-         * @returns {number} The FWC Ratio required for the target strength.
+         * @param {string} cementType The selected cement type (e.g., 'OPC53', 'PPC').
+         * @returns {object} {ratio: number, curveName: string}
          */
-        function getFWCRatioForTargetStrength(fck_target) {
-            const keys = Object.keys(FWC_RATIO_TARGET_STRENGTH).map(Number).sort((a, b) => a - b);
+        function getFWCRatioForTargetStrength(fck_target, cementType) {
+            let strengthMap = FWC_RATIO_TARGET_STRENGTH_OPC53;
+            let curveName = 'Curve 1 (OPC 53 Grade)';
+
+            // Select Curve 2 for PPC, PSC, and OPC 43
+            if (cementType === 'PPC' || cementType === 'PSC' || cementType === 'OPC43') {
+                strengthMap = FWC_RATIO_TARGET_STRENGTH_PPC_OPC43;
+                curveName = 'Curve 2 (PPC/PSC/OPC 43 Grade)';
+            } else if (cementType === 'Other' || cementType === 'OPC33') {
+                // For other/low grade, also use a conservative curve (Curve 2)
+                strengthMap = FWC_RATIO_TARGET_STRENGTH_PPC_OPC43;
+                curveName = 'Curve 2 (Conservative)';
+            }
+
+
+            const keys = Object.keys(strengthMap).map(Number).sort((a, b) => a - b);
             
             // Extrapolation for strengths below minimum table value
             if (fck_target <= keys[0]) {
-                return FWC_RATIO_TARGET_STRENGTH[keys[0]];
+                return {ratio: strengthMap[keys[0]], curveName};
             }
             // Extrapolation for strengths above maximum table value
             if (fck_target >= keys[keys.length - 1]) {
                 const k_max = keys[keys.length - 1];
                 const k_prev = keys[keys.length - 2];
-                const r_max = FWC_RATIO_TARGET_STRENGTH[k_max];
-                const r_prev = FWC_RATIO_TARGET_STRENGTH[k_prev];
+                const r_max = strengthMap[k_max];
+                const r_prev = strengthMap[k_prev];
                 
                 // Use linear trend from the top two points for extrapolation
                 const slope = (r_max - r_prev) / (k_max - k_prev);
-                return r_max + slope * (fck_target - k_max);
+                return {ratio: r_max + slope * (fck_target - k_max), curveName};
             }
 
             // Linear Interpolation
@@ -380,14 +408,14 @@
                 const k1 = keys[i];
                 const k2 = keys[i+1];
                 if (fck_target >= k1 && fck_target <= k2) {
-                    const r1 = FWC_RATIO_TARGET_STRENGTH[k1];
-                    const r2 = FWC_RATIO_TARGET_STRENGTH[k2];
+                    const r1 = strengthMap[k1];
+                    const r2 = strengthMap[k2];
                     
                     const ratio = r1 + (r2 - r1) * ((fck_target - k1) / (k2 - k1));
-                    return ratio;
+                    return {ratio, curveName};
                 }
             }
-            return 0.30; // Default fallback to M50 strength ratio
+            return {ratio: 0.30, curveName: 'Fallback'}; // Fallback
         }
 
 
@@ -411,6 +439,7 @@
             const faAbsorption = parseFloat(document.getElementById('fa_absorption').value) / 100; 
             const aggregateType = document.getElementById('aggregate_type').value; 
             const maxCementLimit = parseFloat(document.getElementById('max_cement_content').value); 
+            const cementType = document.getElementById('cement_type').value;
 
             // Input Validation (Basic)
             if (isNaN(fck) || fck < 10 || isNaN(msa) || isNaN(wCRatioDesign) || isNaN(S_cement) || isNaN(S_fa) || isNaN(S_ca) || isNaN(S_admixture) || wCRatioDesign <= 0 || S_cement <= 0 || S_fa <= 0 || S_ca <= 0 || S_admixture <= 0) {
@@ -444,7 +473,7 @@
             </div>`;
             
             
-            // --- STEP 2: Determine Governing Water-Cement Ratio ---
+            // --- STEP 2: Determine Governing Free Water-Cement Ratio ---
             
             // 2a. Durability Check (IS 456, Table 5)
             const durabilityLimits = IS_456_DURABILITY_LIMITS[exposure];
@@ -455,8 +484,8 @@
             document.getElementById('min_cement_req').textContent = min_cement_req;
             document.getElementById('max_wc_req').textContent = max_wc_req_durability.toFixed(2);
 
-            // 2b. Strength Check (IS 10262, Table 1)
-            const wc_req_strength = getFWCRatioForTargetStrength(fck_target);
+            // 2b. Strength Check (IS 10262, Table 1 / Curve 2)
+            const {ratio: wc_req_strength, curveName: strengthCurveName} = getFWCRatioForTargetStrength(fck_target, cementType);
             
             // 2c. Governing W/C Ratio (The lowest of the three)
             let wCRatioGoverning = Math.min(wCRatioDesign, max_wc_req_durability, wc_req_strength);
@@ -475,7 +504,7 @@
             // Detail calculation output for W/C Ratio
             calcDetails += `<div class="calculation-step">
                 <h4>2. Determine Governing Free Water-Cement Ratio ($\mathbf{FWCR_{gov}}$)</h4>
-                <p>1. W/C Ratio for Target Strength (${round(fck_target).toFixed(2)} \text{ MPa}$, IS 10262 Table 1, by Interpolation): <span class="res">${round(wc_req_strength, 4).toFixed(4)}</span></p>
+                <p>1. W/C Ratio for Target Strength (${round(fck_target).toFixed(2)} \text{ MPa}$ from ${strengthCurveName}): <span class="res">${round(wc_req_strength, 4).toFixed(4)}</span></p>
                 <p>2. Maximum W/C Ratio for Durability (${exposure}): <span class="res">${max_wc_req_durability.toFixed(2)}</span></p>
                 <p>3. Input Design W/C Ratio: <span class="res">${wCRatioDesign.toFixed(2)}</span></p>
                 <p>$\mathbf{FWCR_{gov}} = \min(${round(wc_req_strength, 4).toFixed(4)}, ${max_wc_req_durability.toFixed(2)}, ${wCRatioDesign.toFixed(2)}) = \mathbf{${wCRatioGoverning.toFixed(3)}}$</p>
@@ -659,13 +688,14 @@
             document.getElementById('res_fa').textContent = round(FA_mass_ssd).toFixed(1);
             document.getElementById('res_ca').textContent = round(CA_mass_ssd).toFixed(1);
             document.getElementById('res_admixture').textContent = round(admixture_content).toFixed(3);
+            document.getElementById('res_water_net').textContent = round(final_water_content).toFixed(1);
+
 
             // Display Field (Corrected) Results
             document.getElementById('field_cement').textContent = round(final_cement_content).toFixed(1); 
             document.getElementById('field_water').textContent = round(Math.max(0, water_mass_adjusted)).toFixed(1);
             document.getElementById('field_fa').textContent = round(FA_mass_field).toFixed(1);
             document.getElementById('field_ca').textContent = round(CA_mass_field).toFixed(1);
-            document.getElementById('res_water_net').textContent = round(final_water_content).toFixed(1);
 
             // Mix Ratio
             const ratio_fa = FA_mass_ssd / final_cement_content;
