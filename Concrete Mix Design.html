@@ -193,9 +193,9 @@
                     <div class="input-group">
                         <label for="wc_governing_selection" class="block text-sm text-gray-700 mb-1">Governing W/C Ratio Choice</label>
                         <select id="wc_governing_selection" class="input-field bg-white" onchange="calculateMix()">
-                            <option value="DesignInput" selected>User Design W/C Input</option>
+                            <option value="DesignInput">User Design W/C Input</option>
                             <option value="StrengthTarget">Calculated W/C for Target Strength</option>
-                            <option value="LowestValue">Lowest of Both (Design/Strength)</option>
+                            <option value="LowestValue" selected>Lowest of Both (Design/Strength)</option>
                         </select>
                         <p class="text-xs text-gray-500 mt-1">Select the W/C for strength calculation (always capped by Durability Max W/C).</p>
                     </div>
