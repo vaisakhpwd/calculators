@@ -3,1015 +3,526 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Prestressing Stressing Report Generator</title>
+    <title>Prestressing Report Generator</title>
+    <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <!-- jsPDF and jsPDF-AutoTable CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        // Auth imports
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        // Firestore imports (corrected the module path for doc, setDoc, onSnapshot)
+        import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        
+        // Set Firestore log level
+        setLogLevel('Debug');
+        
+        // Assign all necessary functions to the window object for access by the main script
+        window.firebase = {
+            initializeApp, 
+            getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged,
+            getFirestore, doc, setDoc, onSnapshot
+        };
+    </script>
+    
     <style>
-        body { font-family: 'Inter', sans-serif; background-color: #f7fafc; }
-        /* Style for data entry groups */
-        .input-group { 
-            display: flex; 
-            align-items: center; 
-            justify-content: space-between; 
-            padding: 0.5rem 0; 
-            border-bottom: 1px dashed #e2e8f0; 
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f4f8;
         }
-        .input-label { 
-            font-weight: 500; 
-            color: #4a5568; 
-            flex-grow: 1; 
-            margin-right: 0.5rem;
+        .data-input {
+            @apply w-full p-3 border border-gray-300 rounded-lg text-lg focus:ring-indigo-500 focus:border-indigo-500 transition-shadow;
         }
-        /* Style for numerical input fields */
-        .input-field { 
-            border: 1px solid #cbd5e0; 
-            padding: 0.25rem 0.5rem; 
-            border-radius: 0.375rem; 
-            max-width: 150px; 
-            text-align: right; 
-            font-family: monospace;
-            width: 100%;
+        .section-header {
+            @apply text-xl font-bold text-indigo-800 mb-4 border-b pb-2 mt-6;
         }
-        /* Style for table inputs */
-        .table-input { 
-            width: 100%; 
-            padding: 0.25rem; 
-            text-align: center; 
-            border-radius: 0.25rem; 
-            border: 1px solid #d1d5db; 
-        }
-        .header-bg { 
-            background-color: #1a202c; 
-            color: white; 
-        }
-
-        /* --- PDF/PRINT STYLING (Hides inputs for clean PDF output) --- */
-        @media print {
-            body { 
-                background-color: white !important; 
-                margin: 0; 
-                padding: 0;
-            }
-            .max-w-4xl { max-width: 100%; margin: 0; padding: 0; box-shadow: none; }
-            header, footer, .print-hidden { display: none !important; }
-            /* Show calculated spans instead of input fields */
-            input, button { display: none !important; }
-            .input-group input { display: none; }
-            .input-group span { display: block !important; }
-            
-            /* Ensure tables and borders are visible for professional look */
-            table, th, td { border-color: #000 !important; }
-            .header-bg { background-color: #e5e7eb !important; color: #1f2937 !important; print-color-adjust: exact; }
-            .bg-yellow-100 { background-color: #fef3c7 !important; print-color-adjust: exact; }
-            .bg-emerald-50 { background-color: #ecfdf5 !important; print-color-adjust: exact; }
-            
-            /* Display only the final calculated values for inputs */
-            .input-group .input-field { 
-                display: none !important; 
-            }
-            .input-group:not(:has(.calculated-value)) .input-label {
-                /* For inputs without a calculated span, display the label and its sibling */
-                flex-grow: 0;
-                margin-right: 1rem;
-            }
-
-            /* Display value next to its label for input fields */
-            .input-group::after {
-                content: attr(data-value); /* Use a data attribute to store the input value */
-                font-weight: bold;
-                color: #1f2937;
-            }
-            
-            /* Ensure the print content is not clipped */
-            .p-4, .p-6, .md\:p-10 { padding: 0.5rem !important; }
+        .calc-output {
+            @apply p-3 bg-indigo-50 rounded-lg text-indigo-900 font-semibold;
         }
     </style>
 </head>
 <body class="p-4 md:p-8">
+    <div id="app" class="max-w-4xl mx-auto bg-white rounded-xl shadow-2xl p-6 md:p-8">
+        <h1 class="text-3xl font-extrabold text-gray-800 mb-6 border-b pb-3">Prestressing Report Generator</h1>
+        
+        <!-- User ID and Control -->
+        <div class="space-y-3 mb-6 p-4 bg-gray-50 rounded-lg shadow-inner">
+            <input type="text" id="user-id-display" class="data-input text-sm bg-gray-100 italic" readonly value="User ID Loading...">
+            <button onclick="clearAllData()" class="w-full px-4 py-2 bg-red-500 text-white font-semibold rounded-lg shadow-md hover:bg-red-600 transition duration-150">
+                Clear All Data
+            </button>
+        </div>
 
-    <!-- Firebase Imports and Setup -->
+        <!-- Input Form -->
+        <div id="input-form" class="space-y-6">
+            
+            <h2 class="section-header">Project & General Details</h2>
+            <input type="text" id="project-name" class="data-input" placeholder="Project / Girder Name (e.g., A1-P1 L)">
+            <input type="date" id="date-of-stressing" class="data-input">
+            <input type="number" step="0.01" id="girder-length" class="data-input" placeholder="Girder Length (m)">
+            <input type="number" id="concrete-age" class="data-input" placeholder="Concrete Age (Days)">
+            <input type="number" id="concrete-strength" class="data-input" placeholder="Concrete Strength (N/mm²)">
+
+            <h2 class="section-header">Jack & Gauge Parameters</h2>
+            <input type="number" step="0.01" id="ram-area" class="data-input" placeholder="Stressing RAM Area (cm²)">
+            <input type="number" step="0.1" id="jack-efficiency" class="data-input" placeholder="Jack Efficiency (%)">
+            <input type="number" id="grip-length-design" class="data-input" placeholder="Grip Length Design (mm)">
+            <input type="number" id="grip-length-actual" class="data-input" placeholder="Grip Length Actual (mm)">
+
+            <h2 class="section-header">Strand & Material Properties</h2>
+            <input type="number" step="0.01" id="e-modulus-design" class="data-input" placeholder="E Modulus Design (kN/mm²)">
+            <input type="number" step="0.01" id="e-modulus-actual" class="data-input" placeholder="E Modulus Actual (kN/mm²)">
+            <input type="number" step="0.01" id="strand-area-design" class="data-input" placeholder="Strand Area Design (mm²)">
+            <input type="number" step="0.01" id="strand-area-actual" class="data-input" placeholder="Strand Area Actual (mm²)">
+            <input type="number" step="0.001" id="strand-length-design" class="data-input" placeholder="Strand Length Design (m)">
+            <input type="number" step="0.001" id="strand-length-actual" class="data-input" placeholder="Strand Length Actual (m)">
+            
+            <h2 class="section-header">Force & Elongation Targets</h2>
+            <input type="number" id="jack-force-min" class="data-input" placeholder="Design Jack Force Min (kN)">
+            <input type="number" id="jack-force-max" class="data-input" placeholder="Design Jack Force Max (kN)">
+            <input type="number" step="0.01" id="elongation-jack" class="data-input" placeholder="Design Elongation (Jack, mm)">
+            <input type="number" step="0.01" id="elongation-girder" class="data-input" placeholder="Design Elongation (Girder, mm)">
+
+            <button onclick="saveAllInputs()" class="w-full p-4 bg-indigo-600 text-white font-extrabold text-xl rounded-lg shadow-xl hover:bg-indigo-700 transition duration-150 transform hover:scale-[1.01]">
+                SAVE & CALCULATE
+            </button>
+        </div>
+
+        <!-- Calculated Outputs & Summary -->
+        <div id="calculations" class="mt-10 p-6 bg-blue-50 rounded-xl shadow-lg space-y-4">
+            <h2 class="section-header !mt-0 text-blue-800">Calculated Report Targets</h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="calc-output">
+                    <div class="text-sm text-gray-600">Total Design Elongation (mm)</div>
+                    <div id="calc-design-total" class="text-2xl">0.00</div>
+                </div>
+                <div class="calc-output">
+                    <div class="text-sm text-gray-600">Target Min Jack Pressure (kg/cm²)</div>
+                    <div id="calc-min-pressure" class="text-2xl">0.00</div>
+                </div>
+                <div class="calc-output">
+                    <div class="text-sm text-gray-600">Modified Elongation Target (mm)</div>
+                    <div id="calc-mod-elong" class="text-2xl">0.00</div>
+                </div>
+                <div class="calc-output">
+                    <div class="text-sm text-gray-600">Elongation Range (+/- 5%) (mm)</div>
+                    <div id="calc-range" class="text-2xl text-orange-600">0.00 - 0.00</div>
+                </div>
+            </div>
+            
+            <button onclick="exportToPDF()" class="w-full px-4 py-3 bg-green-600 text-white font-bold rounded-lg shadow-lg hover:bg-green-700 transition duration-150">
+                Generate Final PDF Report
+            </button>
+        </div>
+    </div>
+    
+    <!-- Toast Notification for Messages -->
+    <div id="toast" class="fixed bottom-5 right-5 z-50 p-4 bg-gray-800 text-white rounded-lg shadow-xl hidden transition-opacity duration-300"></div>
+
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        // Global variables for Firebase instances
+        let app, db, auth;
+        let userId = 'loading';
+        let isAuthReady = false;
 
-        // --- Global Constants ---
-        const REPORT_DOCUMENT_ID = 'current_stressing_report';
-        const APP_ID = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const FIREBASE_CONFIG = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
-        const INITIAL_AUTH_TOKEN = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-        
-        // Custom Calculation Constants
-        const START_PRESSURE = 250;
-        const BASE_PRESSURE = 50;
-        const SET_LOSS_LIMIT = 8; // Anchorage set/loss limit in mm
-
-        // Global Firebase Vars
-        let db;
-        let auth;
-        let userId = 'anonymous';
-
-        // Utility: Convert kN to kg/cm2
-        // Pressure (kg/cm²) = (Force_kN × 1000 / 9.81) / (RamArea × Efficiency)
-        const kNToKgPerCm2 = (forceKN, ramArea, efficiency) => (forceKN * 1000 / 9.81) / (ramArea * efficiency);
-
-        // Utility: Date calculation function
-        const getInitialDates = () => {
-            const today = new Date();
-            const formatDate = (date) => {
-                const d = new Date(date);
-                const year = d.getFullYear();
-                const month = String(d.getMonth() + 1).padStart(2, '0');
-                const day = String(d.getDate()).padStart(2, '0');
-                return `${year}-${month}-${day}`;
-            };
-            
-            const stressingDate = formatDate(today);
-
-            // Calculate Casting Date (28 days before for a good default)
-            const castingDateObj = new Date(today);
-            castingDateObj.setDate(today.getDate() - 28);
-            const dateOfCasting = formatDate(castingDateObj);
-
-            // Calculate initial age in days (using default dates)
-            const ageInDays = Math.ceil((today.getTime() - castingDateObj.getTime()) / (1000 * 60 * 60 * 24));
-
-            return { stressingDate, dateOfCasting, ageInDays };
-        };
-
-        const { stressingDate, dateOfCasting, ageInDays } = getInitialDates();
-
-        // State object initialized with new structure
+        // Data storage object aligned with report fields
         let reportData = {
-            projectDetails: {
-                location: 'Gandhibhavan Kochikkadavu Bridge',
-                reportNo: 'A1-P1 L',
-                date: stressingDate, // Stressing Date
-                girderLength: 24.56,
-                startTime: '17:07', 
-                dateOfCasting: dateOfCasting, 
-                endTime: '17:16', 
-                age: ageInDays, // Dynamic calculation
-                concStrength: 45,
-                cableNo: 3,
-                htsCoilNo: 'C012345', 
-            },
-            equipmentParameters: {
-                ramArea: 468.6,
-                jackEfficiency: 0.99, // Stored as a ratio (e.g., 99% -> 0.99)
-                jackMakeNo: 'J-KORE-01',
-                prGaugeNo: 'G-PUCK-05',
-            },
-            designValues: {
-                gripLengthDesign: 750, // Design Grip Length (mm)
-                modulusEDesign: 196.34, // Design Modulus of Elasticity (kN/mm²)
-                strandAreaDesign: 100, // Design Area of strand (mm²)
-                strandLengthDesign: 24.376, // Design Length of strand (m)
-                jackForceMin: 1642, // Design Jack Force Min (kN)
-                jackForceMax: 1667, // Design Jack Force Max (kN)
-                elongationJackDesign: 84.38, // Design Elongation Jack (mm)
-                elongationGirderDesign: 5.4, // Design Elongation Girder (mm)
-                elongationTotalDesign: 0, 
-                finalPressureUsed: 360 
-            },
-            actualValues: {
-                gripLengthActual: 750, // Actual Grip Length (mm)
-                modulusEActual: 195, // Actual Modulus of Elasticity (kN/mm²)
-                strandAreaActual: 99.67, // Actual Area of strand (mm²)
-                strandLengthActual: 24.436, // Actual Length of strand (m)
-            },
-            chartReadings: [
-                { pressure: 10, ramEnd1: 11, ramEnd2: 9 },
-                { pressure: 50, ramEnd1: 31, ramEnd2: 21 },
-                { pressure: 100, ramEnd1: 36, ramEnd2: 42 },
-                { pressure: 150, ramEnd1: 53, ramEnd2: 49 },
-                { pressure: 200, ramEnd1: 72, ramEnd2: 54 },
-                { pressure: 250, ramEnd1: 83, ramEnd2: 65 },
-                { pressure: 300, ramEnd1: 99, ramEnd2: 84 },
-                { pressure: 350, ramEnd1: 111, ramEnd2: 94 },
-                { pressure: 360, ramEnd1: 117, ramEnd2: 97 }, // Final reading at P=360
-            ],
-            releaseReading: {
-                ramEnd1: 10, 
-                ramEnd2: 8, 
-                calculated: {}
-            },
-            calculatedResults: {}
+            // Project Details
+            projectName: '',
+            dateOfStressing: '',
+            girderLength: 0,
+            concreteAge: 0,
+            concreteStrength: 0,
+            // Jack Parameters
+            ramArea: 0, // cm²
+            jackEfficiency: 0, // %
+            gripLengthDesign: 0, // mm
+            gripLengthActual: 0, // mm
+            // Material Properties
+            eModulusDesign: 0, // kN/mm²
+            eModulusActual: 0, // kN/mm²
+            strandAreaDesign: 0, // mm²
+            strandAreaActual: 0, // mm²
+            strandLengthDesign: 0, // m
+            strandLengthActual: 0, // m
+            // Force Targets
+            jackForceMin: 0, // kN
+            jackForceMax: 0, // kN
+            elongationJack: 0, // mm
+            elongationGirder: 0, // mm
         };
 
-        // --- Core Calculation Logic ---
-        const calculateReport = (data) => {
-            const EV = data.equipmentParameters;
-            const DV = data.designValues;
-            const AV = data.actualValues;
-            const RR = data.releaseReading;
+        // Constants from global scope
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
 
-            const jackEff = EV.jackEfficiency; 
-            const ramArea = EV.ramArea;
-
-            const R = {}; // Results
-
-            // ** MODIFICATION: Set Final Stressing Pressure to Max Pressure in Table **
-            const maxPressure = data.chartReadings.reduce((max, r) => Math.max(max, r.pressure), 0);
-            data.designValues.finalPressureUsed = maxPressure; 
-
-            // 0. Pre-calculation: Total Design Elongation
-            DV.elongationTotalDesign = DV.elongationJackDesign + DV.elongationGirderDesign;
-
-            // --- 1. Elongation Modifiers ---
-
-            // Modified elongation for length of strand
-            R.modElongLen = (DV.elongationJackDesign / DV.strandLengthDesign) * AV.strandLengthActual;
-            R.modElongLen = parseFloat(R.modElongLen.toFixed(3)); 
-
-            // Modified elongation within jack (Girder movement modification)
-            R.modElongJack = DV.elongationGirderDesign + ((AV.gripLengthActual - DV.gripLengthDesign) / 1000) * 7;
-            R.modElongJack = parseFloat(R.modElongJack.toFixed(3)); 
-
-            // Modified total elongation
-            R.modElongTotal = R.modElongLen + R.modElongJack;
-            R.modElongTotal = parseFloat(R.modElongTotal.toFixed(3)); 
-
-            // Modified elongation for cross sectional area
-            R.modElongArea = R.modElongTotal * (DV.strandAreaDesign / AV.strandAreaActual);
-            R.modElongArea = parseFloat(R.modElongArea.toFixed(3)); 
-
-            // Modified elongation for modulus of elasticity 
-            R.designElongFinal = R.modElongArea * (DV.modulusEDesign / AV.modulusEActual);
-            R.designElongFinal = parseFloat(R.designElongFinal.toFixed(3)); 
-
-            // Elongation Limits (± 5%)
-            R.elongMin = R.designElongFinal * 0.95;
-            R.elongMax = R.designElongFinal * 1.05;
-            R.elongMin = parseFloat(R.elongMin.toFixed(3)); 
-            R.elongMax = parseFloat(R.elongMax.toFixed(3)); 
-
-            // --- 2. Required Pressure Calculations (Baselines) ---
-            R.pressureMin = kNToKgPerCm2(DV.jackForceMin, ramArea, jackEff);
-            R.pressureMin = parseFloat(R.pressureMin.toFixed(3)); 
-
-            R.pressureMax = kNToKgPerCm2(DV.jackForceMax, ramArea, jackEff);
-            R.pressureMax = parseFloat(R.pressureMax.toFixed(3)); 
-
-            // --- 3. Pressure Limits (4 separate limits as requested) ---
+        // Utility function for simple toast messages
+        function showToast(message, duration = 3000) {
+            const toastEl = document.getElementById('toast');
+            toastEl.textContent = message;
+            toastEl.classList.remove('hidden');
+            toastEl.style.opacity = '1';
             
-            // Limits derived from P_Min
-            R.pressureMinLowerLimit = R.pressureMin * 0.95;
-            R.pressureMinUpperLimit = R.pressureMin * 1.05;
-            R.pressureMinLowerLimit = parseFloat(R.pressureMinLowerLimit.toFixed(3)); 
-            R.pressureMinUpperLimit = parseFloat(R.pressureMinUpperLimit.toFixed(3)); 
-
-            // Limits derived from P_Max
-            R.pressureMaxLowerLimit = R.pressureMax * 0.95;
-            R.pressureMaxUpperLimit = R.pressureMax * 1.05;
-            R.pressureMaxLowerLimit = parseFloat(R.pressureMaxLowerLimit.toFixed(3)); 
-            R.pressureMaxUpperLimit = parseFloat(R.pressureMaxUpperLimit.toFixed(3)); 
-            
-            // Locking Pressure
-            R.lockingPressure = DV.finalPressureUsed * 0.75;
-            R.lockingPressure = parseFloat(R.lockingPressure.toFixed(3)); 
-
-            // --- 4. Process Chart Readings (Cumulative and Difference) ---
-            let processedChart = [];
-            
-            const findRamReading = (pressureTarget, endKey) => {
-                const reading = data.chartReadings.find(r => r.pressure === pressureTarget);
-                return reading ? reading[endKey] : 0;
-            };
-
-            let prevCumEnd1 = 0;
-            let prevCumEnd2 = 0;
-            
-            data.chartReadings.forEach((reading, index) => {
-                let diffEnd1 = 0;
-                let cumEnd1 = 0;
-                let diffEnd2 = 0;
-                let cumEnd2 = 0;
-                let ram50_1 = findRamReading(BASE_PRESSURE, 'ramEnd1');
-                let ram50_2 = findRamReading(BASE_PRESSURE, 'ramEnd2');
-
-                // --- End 1 Calculation ---
-                if (reading.pressure < START_PRESSURE) {
-                    diffEnd1 = 0;
-                    cumEnd1 = 0;
-                } else if (reading.pressure === START_PRESSURE) {
-                    diffEnd1 = reading.ramEnd1 - ram50_1;
-                    cumEnd1 = diffEnd1 + (diffEnd1 * 0.25); 
-                } else if (reading.pressure > START_PRESSURE) {
-                    const prevReading = processedChart.slice().reverse().find(r => r.pressure < reading.pressure && r.pressure >= START_PRESSURE);
-                    
-                    if (prevReading) {
-                        diffEnd1 = reading.ramEnd1 - findRamReading(prevReading.pressure, 'ramEnd1');
-                        cumEnd1 = prevCumEnd1 + diffEnd1;
-                    } else {
-                        cumEnd1 = prevCumEnd1; 
-                    }
-                }
-                
-                // --- End 2 Calculation ---
-                 if (reading.pressure < START_PRESSURE) {
-                    diffEnd2 = 0;
-                    cumEnd2 = 0;
-                } else if (reading.pressure === START_PRESSURE) {
-                    diffEnd2 = reading.ramEnd2 - ram50_2;
-                    cumEnd2 = diffEnd2 + (diffEnd2 * 0.25);
-                } else if (reading.pressure > START_PRESSURE) {
-                    const prevReading = processedChart.slice().reverse().find(r => r.pressure < reading.pressure && r.pressure >= START_PRESSURE);
-
-                    if (prevReading) {
-                        diffEnd2 = reading.ramEnd2 - findRamReading(prevReading.pressure, 'ramEnd2');
-                        cumEnd2 = prevCumEnd2 + diffEnd2;
-                    } else {
-                        cumEnd2 = prevCumEnd2; 
-                    }
-                }
-
-                // Update previous cumulative for next iteration
-                prevCumEnd1 = cumEnd1;
-                prevCumEnd2 = cumEnd2;
-
-                const avgCum = (cumEnd1 + cumEnd2) / 2;
-
-                processedChart.push({
-                    ...reading,
-                    diffEnd1: parseFloat(diffEnd1.toFixed(3)),
-                    cumEnd1: parseFloat(cumEnd1.toFixed(3)),
-                    diffEnd2: parseFloat(diffEnd2.toFixed(3)),
-                    cumEnd2: parseFloat(cumEnd2.toFixed(3)),
-                    avgCum: parseFloat(avgCum.toFixed(3)),
-                });
-            });
-            R.chartProcessed = processedChart;
-
-
-            // --- 5. Calculate Final Elongation and Status ---
-            const finalProcessed = R.chartProcessed.find(r => r.pressure === DV.finalPressureUsed);
-            if (finalProcessed) {
-                // Elongation AT MAX PRESSURE
-                R.finalElongation = (finalProcessed.cumEnd1 + finalProcessed.cumEnd2) / 2;
-                R.finalElongation = parseFloat(R.finalElongation.toFixed(3));
-                
-                // Elongation Status Check (AT MAX PRESSURE)
-                R.elongationStatus = (R.finalElongation >= R.elongMin && R.finalElongation <= R.elongMax) ? 'PASS: Within Tolerance' : 'FAIL: Outside Tolerance';
-                
-                // --- 6. Calculate Release Reading (Set/Loss) ---
-                const rel = {};
-                
-                const ramMax1 = finalProcessed.ramEnd1;
-                const ramMax2 = finalProcessed.ramEnd2;
-                
-                const cumMax1 = finalProcessed.cumEnd1;
-                const cumMax2 = finalProcessed.cumEnd2;
-
-                // Difference (Set/Loss) is Actual Release Reading - Reading at Max Pressure
-                rel.diffEnd1 = RR.ramEnd1 - ramMax1;
-                rel.diffEnd2 = RR.ramEnd2 - ramMax2;
-
-                // Actual Set/Loss (Physical slip amount in mm) is the magnitude of the difference: |RamMax - RamRelease|
-                const actualSetLossEnd1 = Math.abs(RR.ramEnd1 - ramMax1);
-                const actualSetLossEnd2 = Math.abs(RR.ramEnd2 - ramMax2);
-                const actualSetLossAvg = (actualSetLossEnd1 + actualSetLossEnd2) / 2;
-
-                // Calculate cumulative after release (Final Elongation Including Set/Loss)
-                rel.cumEnd1 = cumMax1 + rel.diffEnd1;
-                rel.cumEnd2 = cumMax2 + rel.diffEnd2;
-
-                rel.avgCum = (rel.cumEnd1 + rel.cumEnd2) / 2; // This is the FINAL Elongation after draw-in
-
-                // Check A: Set/Loss Check (Limit is 8mm)
-                R.setLossStatus = (actualSetLossAvg <= SET_LOSS_LIMIT) ? `PASS: Set/Loss ${actualSetLossAvg.toFixed(3)} mm ≤ ${SET_LOSS_LIMIT} mm` : `FAIL: Set/Loss ${actualSetLossAvg.toFixed(3)} mm > ${SET_LOSS_LIMIT} mm`;
-                
-                // Check B: FINAL ELONGATION CHECK (Check the elongation *after* set/loss against tolerance)
-                const finalElongationWithSetLoss = rel.avgCum;
-                R.finalElongationAfterSetLoss = finalElongationWithSetLoss;
-                
-                R.finalElongationAfterSetLossStatus = (finalElongationWithSetLoss >= R.elongMin && finalElongationWithSetLoss <= R.elongMax) 
-                    ? `PASS: ${finalElongationWithSetLoss.toFixed(3)} mm is ±5% of Design` 
-                    : `FAIL: ${finalElongationWithSetLoss.toFixed(3)} mm is outside ±5% tolerance`;
-
-
-                // Format and assign to results
-                R.release = {
-                    diffEnd1: parseFloat(rel.diffEnd1.toFixed(3)),
-                    cumEnd1: parseFloat(rel.cumEnd1.toFixed(3)),
-                    diffEnd2: parseFloat(rel.diffEnd2.toFixed(3)),
-                    cumEnd2: parseFloat(rel.cumEnd2.toFixed(3)),
-                    avgCum: parseFloat(rel.avgCum.toFixed(3)), // Final Elongation (Including Set/Loss)
-                    setLoss: parseFloat(actualSetLossAvg.toFixed(3)), // Actual Set/Loss (mm)
-                }
-
-            } else {
-                R.finalElongation = 'N/A';
-                R.elongationStatus = 'INCOMPLETE: No Final Pressure Reading';
-                R.setLossStatus = 'INCOMPLETE: No Final Pressure Reading';
-                R.finalElongationAfterSetLossStatus = 'INCOMPLETE';
-                // Initialize release data structure to prevent null errors in render
-                R.release = { diffEnd1: 0, cumEnd1: 0, diffEnd2: 0, cumEnd2: 0, avgCum: 0, setLoss: 0 };
-            }
-
-            return R;
-        };
-
-
-        // --- UI Update & Data Binding ---
-
-        const calculateAge = (stressingDateStr, castingDateStr) => {
-             const dateStressing = new Date(stressingDateStr);
-             const dateCasting = new Date(castingDateStr);
-
-            if (!isNaN(dateStressing) && !isNaN(dateCasting) && dateStressing.getTime() >= dateCasting.getTime()) {
-                const diffTime = Math.abs(dateStressing.getTime() - dateCasting.getTime());
-                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                return diffDays;
-            } 
-            return 0;
+            setTimeout(() => {
+                toastEl.style.opacity = '0';
+                setTimeout(() => toastEl.classList.add('hidden'), 300);
+            }, duration);
         }
 
-        const renderUI = () => {
-            // Recalculate Age before main report calculation
-            reportData.projectDetails.age = calculateAge(
-                reportData.projectDetails.date,
-                reportData.projectDetails.dateOfCasting
-            );
-
-            // Recalculate all results
-            reportData.calculatedResults = calculateReport(reportData);
-            const R = reportData.calculatedResults;
-
-            // 1. Render Project Details and Design Parameters
-            document.querySelectorAll('input, span[data-bind], div[data-value]').forEach(el => {
-                if (el.name || el.dataset.bind || el.dataset.value) {
-                    const name = el.name || el.dataset.bind || el.dataset.value;
-                    const [section, key] = name.split('.');
-                    
-                    let val = null;
-
-                    if (reportData[section] && reportData[section].hasOwnProperty(key)) {
-                        val = reportData[section][key];
-                    } else if (section === 'releaseReading' && reportData.releaseReading.hasOwnProperty(key)) {
-                        val = reportData.releaseReading[key];
-                    }
-
-                    if (el.tagName === 'INPUT') {
-                        if (el.type === 'number') {
-                            el.value = val !== null && val !== undefined && val !== 0 ? val : '';
-                        } else if (el.type === 'date' || el.type === 'time' || el.type === 'text') {
-                            el.value = val !== null && val !== undefined ? val : '';
-                        }
-                    } else if (el.tagName === 'SPAN' && el.dataset.bind === name) {
-                         el.textContent = val !== null && val !== undefined ? val : '0';
-                    }
-                    
-                    // Set data-value attribute on parent div for printing
-                    if (el.closest('.input-group') && (el.tagName === 'INPUT' || el.tagName === 'SPAN')) {
-                         const displayValue = (typeof val === 'number' && val !== 0) ? val.toFixed(3) : val;
-                         el.closest('.input-group').setAttribute('data-value', displayValue || '');
-                    }
-                }
-            });
-
-            // 2. Render Calculated Results (using existing logic)
-            const resultsMap = {
-                'elongationTotalDesign': reportData.designValues.elongationTotalDesign, 
-                'modElongLen': R.modElongLen,
-                'modElongJack': R.modElongJack,
-                'modElongTotal': R.modElongTotal,
-                'modElongArea': R.modElongArea,
-                'designElongFinal': R.designElongFinal,
-                'elongMin': R.elongMin,
-                'elongMax': R.elongMax,
-                'pressureMin': R.pressureMin,
-                'pressureMax': R.pressureMax,
-                'pressureMinLowerLimit': R.pressureMinLowerLimit,
-                'pressureMinUpperLimit': R.pressureMinUpperLimit,
-                'pressureMaxLowerLimit': R.pressureMaxLowerLimit,
-                'pressureMaxUpperLimit': R.pressureMaxUpperLimit,
-                'finalPressureUsedDisplay': reportData.designValues.finalPressureUsed, 
-                'lockingPressure': R.lockingPressure,
-                'finalElongation': R.finalElongation,
-            };
-
-            for (const [key, value] of Object.entries(resultsMap)) {
-                const el = document.getElementById(key);
-                if (el) {
-                    if (typeof value === 'number') {
-                        el.textContent = value.toFixed(3);
-                    } else {
-                        el.textContent = value;
-                    }
-                }
+        // --- Firebase & Auth Setup ---
+        async function initializeFirebase() {
+            if (!firebaseConfig) {
+                showToast("Firebase Config not found. Data saving is disabled.", 5000);
+                return;
             }
             
-            // Mirror design elongation to summary section
-            document.getElementById('designElongFinal_summary').textContent = R.designElongFinal !== undefined && R.designElongFinal !== 'N/A' ? R.designElongFinal.toFixed(3) : 'N/A';
-
-            // --- Status Updates ---
-
-            // Helper to set color
-            const setStatusDisplay = (elementId, statusText) => {
-                const el = document.getElementById(elementId);
-                if (!el) return;
-
-                const statusType = statusText.includes('PASS') ? 'PASS' : statusText.includes('FAIL') ? 'FAIL' : 'INCOMPLETE';
-                
-                let textColorClass = 'text-gray-500';
-                if (statusType === 'PASS') {
-                    textColorClass = 'text-green-600';
-                } else if (statusType === 'FAIL') {
-                    textColorClass = 'text-red-600';
-                }
-
-                el.textContent = statusText;
-                el.className = `text-lg md:text-xl font-extrabold ${textColorClass}`;
-            };
-
-
-            // 1. Elongation Status (AT MAX PRESSURE)
-            setStatusDisplay('elongationStatus', R.elongationStatus);
-
-            // 2. Set/Loss Average Elongation (AFTER SET/LOSS)
-            const setLossEl = document.getElementById('finalElongationAfterSetLoss');
-            if (setLossEl) {
-                const avgCum = R.release?.avgCum;
-                setLossEl.textContent = avgCum !== undefined ? avgCum.toFixed(3) : 'N/A';
-            }
-            
-            // 3. Check A: Set/Loss Status (8mm check)
-            setStatusDisplay('setLossStatus', R.setLossStatus || 'INCOMPLETE');
-
-            // 4. Check B: Final Elongation After Set/Loss Tolerance Check
-            setStatusDisplay('finalElongationAfterSetLossStatus', R.finalElongationAfterSetLossStatus || 'INCOMPLETE');
-
-            // 5. Render Chart and Release Rows
-            const chartBody = document.getElementById('chartBody');
-            chartBody.innerHTML = ''; 
-
-            R.chartProcessed.forEach((reading, index) => {
-                const tr = document.createElement('tr');
-                tr.className = index % 2 === 0 ? 'bg-white' : 'bg-gray-50';
-                
-                const isCalculated = reading.pressure >= START_PRESSURE; 
-                
-                const diff1Display = isCalculated ? reading.diffEnd1.toFixed(3) : '0.000';
-                const cum1Display = isCalculated ? reading.cumEnd1.toFixed(3) : '0.000';
-                const diff2Display = isCalculated ? reading.diffEnd2.toFixed(3) : '0.000';
-                const cum2Display = isCalculated ? reading.cumEnd2.toFixed(3) : '0.000';
-                const avgCumDisplay = isCalculated ? reading.avgCum.toFixed(3) : '0.000';
-
-
-                tr.innerHTML = `
-                    <td class="p-2 border border-gray-200">${index + 1}</td>
-                    <td class="p-2 border border-gray-200 print-hidden">
-                        <input type="number" step="1" data-row="${index}" data-key="pressure" value="${reading.pressure}" class="table-input" onchange="window.handleChartInputChange(event)">
-                        <span class="print-only">${reading.pressure}</span>
-                    </td>
-                    <td class="p-2 border border-gray-200 hidden print:table-cell text-center">${reading.pressure}</td>
-
-                    <!-- End 1: Ram Reading -->
-                    <td class="p-2 border border-gray-200 print-hidden">
-                        <input type="number" step="1" data-row="${index}" data-key="ramEnd1" value="${reading.ramEnd1}" class="table-input" onchange="window.handleChartInputChange(event)">
-                    </td>
-                    <td class="p-2 border border-gray-200 text-right hidden print:table-cell">${reading.ramEnd1}</td>
-                    
-                    <!-- End 1: Diff (Calculated) -->
-                    <td class="p-2 border border-gray-200 text-right">${diff1Display}</td>
-                    <!-- End 1: Cum (Calculated) -->
-                    <td class="p-2 border border-gray-200 text-right font-semibold">${cum1Display}</td>
-
-                    <!-- End 2: Ram Reading -->
-                    <td class="p-2 border border-gray-200 print-hidden">
-                        <input type="number" step="1" data-row="${index}" data-key="ramEnd2" value="${reading.ramEnd2}" class="table-input" onchange="window.handleChartInputChange(event)">
-                    </td>
-                    <td class="p-2 border border-gray-200 text-right hidden print:table-cell">${reading.ramEnd2}</td>
-
-                    <!-- End 2: Diff (Calculated) -->
-                    <td class="p-2 border border-gray-200 text-right">${diff2Display}</td>
-                    <!-- End 2: Cum (Calculated) -->
-                    <td class="p-2 border border-gray-200 text-right font-semibold">${cum2Display}</td>
-                    
-                    <!-- Avg. Elongation (Calculated) -->
-                    <td class="p-2 border border-gray-200 text-right font-extrabold text-blue-800">${avgCumDisplay}</td>
-                `;
-                chartBody.appendChild(tr);
-            });
-            
-            // Render Final Release Row
-            const finalRow = document.createElement('tr');
-            finalRow.className = 'bg-yellow-100 font-bold border-2 border-yellow-500';
-
-            const releaseCalculated = R.release || reportData.releaseReading.calculated;
-
-            finalRow.innerHTML = `
-                <td class="p-2 border border-yellow-500 text-center">${R.chartProcessed.length + 1}</td>
-                <td class="p-2 border border-yellow-500 text-center text-red-700" colspan="2">FINAL (After Release)</td>
-                
-                <!-- End 1: Ram Reading (Input) -->
-                <td class="p-2 border border-yellow-500 print-hidden">
-                    <input type="number" step="1" name="releaseReading.ramEnd1" value="${reportData.releaseReading.ramEnd1}" class="table-input bg-yellow-50" onchange="window.handleInputChange(event)">
-                </td>
-                <td class="p-2 border border-yellow-500 text-right hidden print:table-cell">${reportData.releaseReading.ramEnd1}</td>
-
-                <!-- End 1: Diff (Calculated - Set/Loss) -->
-                <td class="p-2 border border-yellow-500 text-right">${releaseCalculated.diffEnd1?.toFixed(3) || 'N/A'}</td>
-                <!-- End 1: Cum (Calculated) -->
-                <td class="p-2 border border-yellow-500 text-right">${releaseCalculated.cumEnd1?.toFixed(3) || 'N/A'}</td>
-
-                <!-- End 2: Ram Reading (Input) -->
-                <td class="p-2 border border-yellow-500 print-hidden">
-                    <input type="number" step="1" name="releaseReading.ramEnd2" value="${reportData.releaseReading.ramEnd2}" class="table-input bg-yellow-50" onchange="window.handleInputChange(event)">
-                </td>
-                <td class="p-2 border border-yellow-500 text-right hidden print:table-cell">${reportData.releaseReading.ramEnd2}</td>
-
-                <!-- End 2: Diff (Calculated - Set/Loss) -->
-                <td class="p-2 border border-yellow-500 text-right">${releaseCalculated.diffEnd2?.toFixed(3) || 'N/A'}</td>
-                <!-- End 2: Cum (Calculated) -->
-                <td class="p-2 border border-yellow-500 text-right">${releaseCalculated.cumEnd2?.toFixed(3) || 'N/A'}</td>
-                
-                <!-- Avg. Elongation (Calculated) -->
-                <td class="p-2 border border-yellow-500 text-right text-red-700">${releaseCalculated.avgCum?.toFixed(3) || 'N/A'}</td>
-            `;
-            chartBody.appendChild(finalRow);
-        };
-
-        // Global functions for event handlers
-        window.handleInputChange = (event) => {
-            const input = event.target;
-            const value = input.type === 'number' && input.value !== '' ? parseFloat(input.value) : input.value;
-            
-            if (input.name) {
-                const [section, key] = input.name.split('.');
-                
-                if (reportData[section] && reportData[section].hasOwnProperty(key)) {
-                    reportData[section][key] = value;
-                    saveData();
-                }
-            }
-        };
-
-        window.handleChartInputChange = (event) => {
-            const input = event.target;
-            const row = parseInt(input.getAttribute('data-row'));
-            const key = input.getAttribute('data-key');
-            
-            const value = input.value !== '' ? parseFloat(input.value) : 0; 
-
-            if (!isNaN(value)) {
-                if(reportData.chartReadings[row]) {
-                     reportData.chartReadings[row][key] = value;
-                     
-                     reportData.chartReadings.sort((a, b) => a.pressure - b.pressure);
-
-                     saveData();
-                }
-            }
-        };
-
-        window.addRow = () => {
-            const maxPressure = reportData.chartReadings.reduce((max, r) => Math.max(max, r.pressure), 0);
-            
-            let newPressure = maxPressure + 50;
-            if (maxPressure === 350) {
-                 newPressure = 360;
-            } else if (maxPressure === 0) {
-                 newPressure = 50; 
-            }
-            
-            const newRow = { pressure: newPressure, ramEnd1: 0, ramEnd2: 0 };
-            reportData.chartReadings.push(newRow);
-            
-            reportData.chartReadings.sort((a, b) => a.pressure - b.pressure);
-            saveData();
-        };
-
-        window.removeLastRow = () => {
-            if (reportData.chartReadings.length > 1) {
-                reportData.chartReadings.pop(); 
-                saveData();
-            }
-        };
-        
-        window.generatePdf = () => {
-            window.print();
-        }
-
-        // --- Firebase Integration (Unchanged) ---
-
-        const getReportDocRef = () => {
-             return doc(db, `artifacts/${APP_ID}/public/data/stressing_reports`, REPORT_DOCUMENT_ID);
-        };
-
-        const saveData = () => {
-            if (!db || !userId) {
-                console.error("Firestore not initialized or user not authenticated.");
+            // Check if window.firebase was successfully populated by the module script
+            if (typeof window.firebase === 'undefined') {
+                console.error("Firebase module imports failed to load.");
+                showToast("Error loading Firebase modules. Please check network/console.", 5000);
                 return;
             }
 
-            const docRef = getReportDocRef();
+            try {
+                // Destructure functions from the correctly populated window.firebase object
+                const { initializeApp, getAuth, signInAnonymously, signInWithCustomToken, getFirestore, onAuthStateChanged } = window.firebase;
+                
+                app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+
+                // Attach event listeners to all input fields to trigger save on change
+                document.querySelectorAll('#input-form input').forEach(input => {
+                    input.addEventListener('input', calculateTargets);
+                });
+                
+                onAuthStateChanged(auth, async (user) => {
+                    if (user) {
+                        userId = user.uid;
+                        document.getElementById('user-id-display').value = `User ID: ${userId}`;
+                        isAuthReady = true;
+                        startDataListener();
+                    } else {
+                        if (initialAuthToken) {
+                            await signInWithCustomToken(auth, initialAuthToken);
+                        } else {
+                            await signInAnonymously(auth);
+                            userId = auth.currentUser?.uid || 'anonymous';
+                            document.getElementById('user-id-display').value = `User ID (Anon): ${userId}`;
+                        }
+                        isAuthReady = true;
+                        startDataListener();
+                    }
+                });
+
+            } catch (error) {
+                console.error("Firebase Initialization failed:", error);
+                showToast("Error initializing Firebase: " + error.message, 5000);
+            }
+        }
+
+        // --- Firestore Operations ---
+        function getDocumentRef() {
+            if (!db || !userId) return null;
+            // Public data storage path: /artifacts/{appId}/public/data/prestressing_report/{userId}
+            return window.firebase.doc(db, 'artifacts', appId, 'public', 'data', 'prestressing_report', userId);
+        }
+        
+        // Save current data (all report fields)
+        async function saveReportData() {
+            if (!isAuthReady || !db) return;
+
+            // 1. Collect all data from UI and update reportData object
+            reportData.projectName = document.getElementById('project-name').value;
+            reportData.dateOfStressing = document.getElementById('date-of-stressing').value;
+            reportData.girderLength = parseFloat(document.getElementById('girder-length').value) || 0;
+            reportData.concreteAge = parseFloat(document.getElementById('concrete-age').value) || 0;
+            reportData.concreteStrength = parseFloat(document.getElementById('concrete-strength').value) || 0;
+            reportData.ramArea = parseFloat(document.getElementById('ram-area').value) || 0;
+            reportData.jackEfficiency = parseFloat(document.getElementById('jack-efficiency').value) || 0;
+            reportData.gripLengthDesign = parseFloat(document.getElementById('grip-length-design').value) || 0;
+            reportData.gripLengthActual = parseFloat(document.getElementById('grip-length-actual').value) || 0;
+            reportData.eModulusDesign = parseFloat(document.getElementById('e-modulus-design').value) || 0;
+            reportData.eModulusActual = parseFloat(document.getElementById('e-modulus-actual').value) || 0;
+            reportData.strandAreaDesign = parseFloat(document.getElementById('strand-area-design').value) || 0;
+            reportData.strandAreaActual = parseFloat(document.getElementById('strand-area-actual').value) || 0;
+            reportData.strandLengthDesign = parseFloat(document.getElementById('strand-length-design').value) || 0;
+            reportData.strandLengthActual = parseFloat(document.getElementById('strand-length-actual').value) || 0;
+            reportData.jackForceMin = parseFloat(document.getElementById('jack-force-min').value) || 0;
+            reportData.jackForceMax = parseFloat(document.getElementById('jack-force-max').value) || 0;
+            reportData.elongationJack = parseFloat(document.getElementById('elongation-jack').value) || 0;
+            reportData.elongationGirder = parseFloat(document.getElementById('elongation-girder').value) || 0;
+
+            const docRef = getDocumentRef();
             const dataToSave = {
                 ...reportData,
-                updatedAt: new Date().toISOString(),
-                updatedBy: userId
+                updatedAt: new Date().toISOString()
             };
 
-            setDoc(docRef, dataToSave, { merge: true }).catch(error => {
-                console.error("Error saving document: ", error);
-            });
-        };
+            try {
+                await window.firebase.setDoc(docRef, dataToSave, { merge: true });
+                showToast("Data saved successfully.", 1500);
+            } catch (error) {
+                console.error("Error saving data:", error);
+                showToast("Error saving data: " + error.message, 3000);
+            }
+        }
 
-        const startRealtimeListener = () => {
-            if (!db || !userId) return;
+        // Listen for real-time updates
+        function startDataListener() {
+            const docRef = getDocumentRef();
+            if (!docRef) return;
 
-            const docRef = getReportDocRef();
+            const { onSnapshot } = window.firebase;
 
             onSnapshot(docRef, (docSnap) => {
                 if (docSnap.exists()) {
-                    reportData = { ...reportData, ...docSnap.data() };
+                    const data = docSnap.data();
                     
-                    if (reportData.chartReadings && Array.isArray(reportData.chartReadings)) {
-                         reportData.chartReadings.sort((a, b) => a.pressure - b.pressure);
-                    }
+                    // 1. Update reportData object
+                    reportData = { ...reportData, ...data };
                     
-                    if (!reportData.releaseReading) {
-                        reportData.releaseReading = { ramEnd1: 0, ramEnd2: 0, calculated: {} };
-                    }
+                    // 2. Populate UI fields
+                    document.getElementById('project-name').value = reportData.projectName;
+                    document.getElementById('date-of-stressing').value = reportData.dateOfStressing;
+                    document.getElementById('girder-length').value = reportData.girderLength || '';
+                    document.getElementById('concrete-age').value = reportData.concreteAge || '';
+                    document.getElementById('concrete-strength').value = reportData.concreteStrength || '';
+                    document.getElementById('ram-area').value = reportData.ramArea || '';
+                    document.getElementById('jack-efficiency').value = reportData.jackEfficiency || '';
+                    document.getElementById('grip-length-design').value = reportData.gripLengthDesign || '';
+                    document.getElementById('grip-length-actual').value = reportData.gripLengthActual || '';
+                    document.getElementById('e-modulus-design').value = reportData.eModulusDesign || '';
+                    document.getElementById('e-modulus-actual').value = reportData.eModulusActual || '';
+                    document.getElementById('strand-area-design').value = reportData.strandAreaDesign || '';
+                    document.getElementById('strand-area-actual').value = reportData.strandAreaActual || '';
+                    document.getElementById('strand-length-design').value = reportData.strandLengthDesign || '';
+                    document.getElementById('strand-length-actual').value = reportData.strandLengthActual || '';
+                    document.getElementById('jack-force-min').value = reportData.jackForceMin || '';
+                    document.getElementById('jack-force-max').value = reportData.jackForceMax || '';
+                    document.getElementById('elongation-jack').value = reportData.elongationJack || '';
+                    document.getElementById('elongation-girder').value = reportData.elongationGirder || '';
 
-                    renderUI();
+                    calculateTargets();
+                    showToast("Data loaded successfully.", 2000);
                 } else {
-                    console.log("No existing report found. Initializing with default data and saving.");
-                    saveData();
+                    console.log("No existing data found, starting fresh.");
+                    calculateTargets();
                 }
             }, (error) => {
-                console.error("Error listening to document: ", error);
+                console.error("Error listening to data:", error);
+                showToast("Real-time sync error: " + error.message, 4000);
             });
-        };
+        }
+        
+        window.saveAllInputs = function() {
+            saveReportData();
+        }
+
+        // Function to clear all data
+        window.clearAllData = function() {
+            // NOTE: Using a custom modal is required, but for quick fix, we'll keep window.confirm temporarily.
+            const confirmClear = window.confirm("Are you sure you want to permanently clear ALL data for this Prestressing Report? This action cannot be undone.");
+            
+            if (confirmClear) {
+                // Reset in memory
+                reportData = Object.keys(reportData).reduce((acc, key) => {
+                    acc[key] = (typeof reportData[key] === 'string' || key === 'dateOfStressing') ? '' : 0;
+                    return acc;
+                }, {});
+
+                // Clear UI
+                document.querySelectorAll('#input-form input').forEach(input => input.value = '');
+
+                // Save blank data to Firestore (effectively clearing it)
+                saveReportData(); 
+                calculateTargets();
+                showToast("All data cleared successfully.", 3000);
+            }
+        }
+
+        // --- Core Calculation Logic ---
+        function calculateTargets() {
+            // Ensure data is up-to-date from UI before calculating
+            // This is primarily for the input listener, not the save button
+            reportData.ramArea = parseFloat(document.getElementById('ram-area').value) || 0;
+            reportData.jackEfficiency = parseFloat(document.getElementById('jack-efficiency').value) || 0;
+            reportData.gripLengthDesign = parseFloat(document.getElementById('grip-length-design').value) || 0;
+            reportData.gripLengthActual = parseFloat(document.getElementById('grip-length-actual').value) || 0;
+            reportData.eModulusDesign = parseFloat(document.getElementById('e-modulus-design').value) || 0;
+            reportData.eModulusActual = parseFloat(document.getElementById('e-modulus-actual').value) || 0;
+            reportData.strandAreaDesign = parseFloat(document.getElementById('strand-area-design').value) || 0;
+            reportData.strandAreaActual = parseFloat(document.getElementById('strand-area-actual').value) || 0;
+            reportData.strandLengthDesign = parseFloat(document.getElementById('strand-length-design').value) * 1000 || 0; // Convert m to mm
+            reportData.strandLengthActual = parseFloat(document.getElementById('strand-length-actual').value) * 1000 || 0; // Convert m to mm
+            reportData.jackForceMin = parseFloat(document.getElementById('jack-force-min').value) || 0;
+            reportData.elongationJack = parseFloat(document.getElementById('elongation-jack').value) || 0;
+            reportData.elongationGirder = parseFloat(document.getElementById('elongation-girder').value) || 0;
 
 
-        const initFirebase = async () => {
-            if (!FIREBASE_CONFIG) {
-                console.error("Firebase config not found. Running in local mode only.");
-                renderUI(); 
+            // Step 1: Total Design Elongation
+            const designTotalElongation = reportData.elongationJack + reportData.elongationGirder;
+
+            // Step 2: Modified elongation for length of strand
+            let modElongLength = designTotalElongation;
+            if (reportData.strandLengthDesign > 0) {
+                // Formula from PDF: 84.38/24.376 * 24.436 (where 84.38 is ElongationJack)
+                // We use the full design elongation * (Actual Length / Design Length)
+                modElongLength = designTotalElongation * (reportData.strandLengthActual / reportData.strandLengthDesign);
+            }
+            
+            // Step 3: Modified elongation within jack
+            // Formula from PDF: 5.4 + (750-750)/1000 * 7 (Grip length actual - design)
+            const modElongJack = reportData.elongationJack + ((reportData.gripLengthActual - reportData.gripLengthDesign) / 1000) * 7;
+            
+            // Step 4: Modified total elongation
+            // NOTE: The original PDF logic seems inconsistent here. It uses: 84.588 (from Step 2) + 5.4 (from Step 3).
+            // This implies: (Mod Elong Length) + (Mod Elong Jack - ElongationJack)
+            const modifiedTotalElongation = modElongLength + (modElongJack - reportData.elongationJack);
+
+            // Step 5: Modified elongation for cross sectional area
+            let modElongArea = modifiedTotalElongation;
+            if (reportData.strandAreaDesign > 0) {
+                // Formula: 89.988 * 100 / 99.67 (where 100 is Design Area, 99.67 is Actual Area)
+                // We use: Modified Total * (Design Area / Actual Area)
+                modElongArea = modifiedTotalElongation * (reportData.strandAreaDesign / reportData.strandAreaActual);
+            }
+
+            // Step 6: Modified elongation for modulus of elasticity (Final Modified Target)
+            let finalModifiedElongation = modElongArea;
+            if (reportData.eModulusDesign > 0) {
+                // Formula: 90.286 * 195 / 196.34 (where 195 is Design E-Modulus, 196.34 is Actual E-Modulus)
+                // We use: Modified Area * (Design E-Modulus / Actual E-Modulus)
+                finalModifiedElongation = modElongArea * (reportData.eModulusDesign / reportData.eModulusActual);
+            }
+            
+            // Step 7: Calculate Min Pressure
+            let minPressure = 0;
+            if (reportData.ramArea > 0 && reportData.jackEfficiency > 0) {
+                // Formula: (1642*1000 / (468.6 * 0.99)) / 100 = 3543.1 kg/cm² (from PDF)
+                // Force * 1000 / (Ram Area * Efficiency) / 100
+                const actualRamArea = reportData.ramArea * (reportData.jackEfficiency / 100);
+                if (actualRamArea > 0) {
+                    // Min Pressure (kg/cm²) = (Min Force (kN) * 1000) / (Ram Area (cm^2) * Efficiency (%)) 
+                    // NOTE: This simplified formula is based on the logic seen in similar reports.
+                    minPressure = (reportData.jackForceMin * 1000) / (reportData.ramArea * reportData.jackEfficiency);
+                }
+            }
+
+
+            // Step 8: Calculate Range
+            const minElongation = finalModifiedElongation * 0.95;
+            const maxElongation = finalModifiedElongation * 1.05;
+
+
+            // --- Update UI ---
+            document.getElementById('calc-design-total').textContent = designTotalElongation.toFixed(2);
+            document.getElementById('calc-min-pressure').textContent = minPressure.toFixed(2);
+            document.getElementById('calc-mod-elong').textContent = finalModifiedElongation.toFixed(3);
+            document.getElementById('calc-range').textContent = `${minElongation.toFixed(3)} - ${maxElongation.toFixed(3)}`;
+
+            // Temporarily store calculated values for PDF
+            reportData.designTotalElongation = designTotalElongation;
+            reportData.modifiedElongationFinal = finalModifiedElongation;
+            reportData.minPressure = minPressure;
+            reportData.minElongationRange = minElongation;
+            reportData.maxElongationRange = maxElongation;
+        }
+
+        // --- PDF Export ---
+        window.exportToPDF = function() {
+            if (reportData.ramArea === 0 || reportData.jackForceMin === 0) {
+                showToast("Please enter all required design parameters before generating the report.", 3000);
                 return;
             }
 
-            setLogLevel('debug');
-            const app = initializeApp(FIREBASE_CONFIG);
-            db = getFirestore(app);
-            auth = getAuth(app);
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF('p', 'mm', 'a4'); 
+            
+            const pageWidth = doc.internal.pageSize.getWidth();
+            let y = 15;
 
-            const signIn = async () => {
-                try {
-                    if (INITIAL_AUTH_TOKEN) {
-                        const userCredential = await signInWithCustomToken(auth, INITIAL_AUTH_TOKEN);
-                        userId = userCredential.user.uid;
-                        console.log("Signed in with custom token.", userId);
-                    } else {
-                        const userCredential = await signInAnonymously(auth);
-                        userId = userCredential.user.uid;
-                        console.log("Signed in anonymously.", userId);
-                    }
-                } catch (error) {
-                    console.error("Firebase Authentication failed:", error);
-                    userId = `anon-${crypto.randomUUID()}`;
-                }
-            };
+            // --- Title and Project Info ---
+            doc.setFontSize(16);
+            doc.setTextColor(30); 
+            doc.setFont('helvetica', 'bold');
+            doc.text(`Prestressing Report: ${reportData.projectName || 'Untitled'}`, 10, y);
+            y += 8;
 
-            await signIn();
+            doc.setFontSize(10);
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(50);
+            doc.text(`Date of Stressing: ${reportData.dateOfStressing || 'N/A'}`, 10, y);
+            doc.text(`Girder Length: ${reportData.girderLength.toFixed(2)} m`, pageWidth / 2, y);
+            y += 5;
+            doc.text(`Concrete Strength: ${reportData.concreteStrength} N/mm² (Age: ${reportData.concreteAge} Days)`, 10, y);
+            doc.text(`User ID: ${userId}`, pageWidth / 2, y);
+            y += 10;
+            
+            // --- Design Parameters Table ---
+            const designBody = [
+                ['Jack RAM Area (cm²)', reportData.ramArea.toFixed(2)],
+                ['Jack Efficiency (%)', reportData.jackEfficiency.toFixed(1)],
+                ['Grip Length (Design/Actual) (mm)', `${reportData.gripLengthDesign.toFixed(0)} / ${reportData.gripLengthActual.toFixed(0)}`],
+                ['E Modulus (Design/Actual) (kN/mm²)', `${reportData.eModulusDesign.toFixed(2)} / ${reportData.eModulusActual.toFixed(2)}`],
+                ['Strand Area (Design/Actual) (mm²)', `${reportData.strandAreaDesign.toFixed(2)} / ${reportData.strandAreaActual.toFixed(2)}`],
+                // Strand length is stored in meters, but calculation converts to mm for internal use. Display in meters here.
+                ['Strand Length (Design/Actual) (m)', `${(reportData.strandLengthDesign).toFixed(3)} / ${(reportData.strandLengthActual).toFixed(3)}`],
+            ];
 
-            onAuthStateChanged(auth, (user) => {
-                userId = user ? user.uid : 'anonymous';
-                document.getElementById('userIdDisplay').textContent = `User ID: ${userId}`;
-                startRealtimeListener(); 
+            doc.setFontSize(12);
+            doc.text("Design & Material Properties", 10, y);
+            y += 2;
+            doc.autoTable({
+                head: [['Parameter', 'Value']],
+                body: designBody,
+                startY: y,
+                headStyles: { fillColor: [79, 70, 229], textColor: [255, 255, 255], fontSize: 10 },
+                styles: { fontSize: 9, cellPadding: 2.5, textColor: [50, 50, 50] },
+                margin: { left: 10, right: pageWidth - 10 }
+            });
+            
+            y = doc.autoTable.previous.finalY + 5;
+            
+            // --- Target Calculations Table ---
+            const calcBody = [
+                ['Design Jack Force (Min/Max) (kN)', `${reportData.jackForceMin.toFixed(0)} / ${reportData.jackForceMax.toFixed(0)}`],
+                ['Design Elongation (Jack/Girder) (mm)', `${reportData.elongationJack.toFixed(2)} / ${reportData.elongationGirder.toFixed(2)}`],
+                ['Total Design Elongation (mm)', reportData.designTotalElongation.toFixed(3)],
+                ['Min. Target Jack Pressure (kg/cm²)', reportData.minPressure.toFixed(3)],
+                ['Final Modified Elongation Target (mm)', reportData.modifiedElongationFinal.toFixed(3)],
+                ['Permissible Range (+/- 5%) (mm)', `${reportData.minElongationRange.toFixed(3)} to ${reportData.maxElongationRange.toFixed(3)}`],
+            ];
+
+            doc.setFontSize(12);
+            doc.text("Stressing Targets & Limits", 10, y);
+            y += 2;
+            doc.autoTable({
+                head: [['Calculation', 'Target Value']],
+                body: calcBody,
+                startY: y,
+                headStyles: { fillColor: [22, 163, 74], textColor: [255, 255, 255], fontSize: 10 },
+                styles: { fontSize: 9, cellPadding: 2.5, textColor: [50, 50, 50] },
+                margin: { left: 10, right: 10 }
             });
 
-            renderUI();
-        };
+            // --- Footnote ---
+            const pageHeight = doc.internal.pageSize.height;
+            doc.setFontSize(8);
+            doc.setTextColor(150);
+            doc.text("Generated by Prestressing Report Generator (Single-File App)", pageWidth / 2, pageHeight - 10, { align: 'center' });
 
-        window.onload = initFirebase;
+            doc.save(`${reportData.projectName.replace(/ /g, '_') || 'prestressing-report'}_${reportData.dateOfStressing || 'date'}.pdf`);
+            showToast("PDF report downloaded!", 3000);
+        }
+        
+        // Initialize the application
+        initializeFirebase();
     </script>
-
-    <div class="max-w-4xl mx-auto bg-white p-6 md:p-10 shadow-xl rounded-xl">
-        <header class="text-center mb-8 border-b-4 border-emerald-600 pb-4">
-            <h1 class="text-3xl font-bold text-gray-900">Prestressing Stressing Report</h1>
-            <p id="userIdDisplay" class="text-sm text-gray-500 mt-1">User ID: Loading...</p>
-        </header>
-        
-        <!-- PDF Generation Button -->
-        <div class="print-hidden mb-6 flex justify-center">
-            <button onclick="window.generatePdf()" class="flex items-center space-x-2 px-6 py-3 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 transition duration-150 shadow-lg">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-6 h-6">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 6.878V6a2 2 0 012-2h8a2 2 0 012 2v.878m-12 0h12m0 0l-2.062 2.75a2 2 0 00-.154.218l-4.22 6.33a2 2 0 01-1.637.894H4.373a2 2 0 01-1.637-.894l-4.22-6.33a2 2 0 00-.154-.218L6 6.878z" />
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 17.5L16.5 22.5M19 20L14 20" />
-                </svg>
-                <span>Generate PDF Report</span>
-            </button>
-        </div>
-        
-        <!-- 1. Project Details Section -->
-        <section class="mb-8 border border-gray-200 rounded-lg p-4 shadow-sm">
-            <h2 class="text-lg font-semibold mb-4 text-emerald-700 border-b pb-2">1. Project & Cable Details</h2>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2 text-sm">
-                <div class="input-group"><span class="input-label">Location</span><input type="text" name="projectDetails.location" class="input-field max-w-full print-hidden" onchange="window.handleInputChange(event)"></div>
-                <div class="input-group"><span class="input-label">Report/Girder No.</span><input type="text" name="projectDetails.reportNo" class="input-field max-w-full print-hidden" onchange="window.handleInputChange(event)"></div>
-                <div class="input-group"><span class="input-label">Date of Stressing (Today)</span><input type="date" name="projectDetails.date" class="input-field max-w-full print-hidden" onchange="window.handleInputChange(event)"></div>
-                <div class="input-group"><span class="input-label">Girder Length (m)</span><input type="number" step="0.01" name="projectDetails.girderLength" class="input-field print-hidden" onchange="window.handleInputChange(event)"></div>
-                <div class="input-group"><span class="input-label">Date of Casting</span><input type="date" name="projectDetails.dateOfCasting" class="input-field max-w-full print-hidden" onchange="window.handleInputChange(event)"></div>
-                <div class="input-group"><span class="input-label">Age (days)</span><span data-bind="projectDetails.age" class="calculated-value font-bold text-gray-700">0</span></div>
-                <div class="input-group"><span class="input-label">Strength of Conc. ($N/mm^2$)</span><input type="number" step="1" name="projectDetails.concStrength" class="input-field print-hidden" onchange="window.handleInputChange(event)"></div>
-                <div class="input-group"><span class="input-label">Stressing Cable No.</span><input type="number" step="1" name="projectDetails.cableNo" class="input-field print-hidden" onchange="window.handleInputChange(event)"></div>
-                <div class="input-group"><span class="input-label">HTS Coil No.</span><input type="text" name="projectDetails.htsCoilNo" class="input-field max-w-full print-hidden" onchange="window.handleInputChange(event)"></div>
-                <div class="input-group"><span class="input-label">Start Time</span><input type="time" name="projectDetails.startTime" class="input-field max-w-full print-hidden" onchange="window.handleInputChange(event)"></div>
-                <div class="input-group"><span class="input-label">End Time</span><input type="time" name="projectDetails.endTime" class="input-field max-w-full print-hidden" onchange="window.handleInputChange(event)"></div>
-            </div>
-        </section>
-
-        <!-- 2. Equipment Parameters Section -->
-        <section class="mb-8 border border-gray-200 rounded-lg p-4 shadow-sm">
-            <h2 class="text-lg font-semibold mb-4 text-emerald-700 border-b pb-2">2. Equipment Parameters</h2>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2 text-sm">
-                <div class="input-group"><span class="input-label">Stressing RAM area (cm²)</span><input type="number" step="0.01" name="equipmentParameters.ramArea" class="input-field print-hidden" onchange="window.handleInputChange(event)"></div>
-                <div class="input-group"><span class="input-label">Jack Efficiency (Ratio, e.g., 0.99)</span><input type="number" step="0.01" name="equipmentParameters.jackEfficiency" class="input-field print-hidden" onchange="window.handleInputChange(event)"></div>
-                <div class="input-group"><span class="input-label">Jack Make and No.</span><input type="text" name="equipmentParameters.jackMakeNo" class="input-field max-w-full print-hidden" onchange="window.handleInputChange(event)"></div>
-                <div class="input-group"><span class="input-label">Pr. Gauge No.</span><input type="text" name="equipmentParameters.prGaugeNo" class="input-field max-w-full print-hidden" onchange="window.handleInputChange(event)"></div>
-            </div>
-        </section>
-        
-        <!-- 3. Design Parameters Section -->
-        <section class="mb-8 border border-gray-200 rounded-lg p-4 shadow-sm">
-            <h2 class="text-lg font-semibold mb-4 text-emerald-700 border-b pb-2">3. Design Parameters (As Per Drawings)</h2>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2 text-sm">
-                <div class="input-group"><span class="input-label">Grip length within Jack (Design, mm)</span><input type="number" step="1" name="designValues.gripLengthDesign" class="input-field print-hidden" onchange="window.handleInputChange(event)"></div>
-                <div class="input-group"><span class="input-label">Modulus of Elasticity (Design, kN/mm²)</span><input type="number" step="0.01" name="designValues.modulusEDesign" class="input-field print-hidden" onchange="window.handleInputChange(event)"></div>
-                <div class="input-group"><span class="input-label">Area of strand (Design, mm²)</span><input type="number" step="0.01" name="designValues.strandAreaDesign" class="input-field print-hidden" onchange="window.handleInputChange(event)"></div>
-                <div class="input-group"><span class="input-label">Length of Strand (Design, m)</span><input type="number" step="0.001" name="designValues.strandLengthDesign" class="input-field print-hidden" onchange="window.handleInputChange(event)"></div>
-                <div class="input-group"><span class="input-label">Design Jack Force Min (kN)</span><input type="number" step="1" name="designValues.jackForceMin" class="input-field print-hidden" onchange="window.handleInputChange(event)"></div>
-                <div class="input-group"><span class="input-label">Design Jack Force Max (kN)</span><input type="number" step="1" name="designValues.jackForceMax" class="input-field print-hidden" onchange="window.handleInputChange(event)"></div>
-                <div class="input-group"><span class="input-label">Design Elongation Jack (mm)</span><input type="number" step="0.01" name="designValues.elongationJackDesign" class="input-field print-hidden" onchange="window.handleInputChange(event)"></div>
-                <div class="input-group"><span class="input-label">Design Elongation Girder (mm)</span><input type="number" step="0.01" name="designValues.elongationGirderDesign" class="input-field print-hidden" onchange="window.handleInputChange(event)"></div>
-                <div class="input-group col-span-1 sm:col-span-2">
-                    <span class="input-label font-extrabold text-base text-indigo-600">Total Design Elongation (mm)</span>
-                    <span class="calculated-value font-extrabold text-base text-indigo-600" id="elongationTotalDesign">0.000</span>
-                </div>
-            </div>
-        </section>
-
-        <!-- 4. Actual Parameters Section -->
-        <section class="mb-8 border border-gray-200 rounded-lg p-4 shadow-sm">
-            <h2 class="text-lg font-semibold mb-4 text-emerald-700 border-b pb-2">4. Actual Parameters (As Measured)</h2>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2 text-sm">
-                <div class="input-group"><span class="input-label">Grip length within Jack (Actual, mm)</span><input type="number" step="1" name="actualValues.gripLengthActual" class="input-field print-hidden" onchange="window.handleInputChange(event)"></div>
-                <div class="input-group"><span class="input-label">Modulus of Elasticity (Actual, kN/mm²)</span><input type="number" step="0.01" name="actualValues.modulusEActual" class="input-field print-hidden" onchange="window.handleInputChange(event)"></div>
-                <div class="input-group"><span class="input-label">Area of strand (Actual, mm²)</span><input type="number" step="0.01" name="actualValues.strandAreaActual" class="input-field print-hidden" onchange="window.handleInputChange(event)"></div>
-                <div class="input-group"><span class="input-label">Length of Strand (Actual, m)</span><input type="number" step="0.001" name="actualValues.strandLengthActual" class="input-field print-hidden" onchange="window.handleInputChange(event)"></div>
-            </div>
-        </section>
-
-        <!-- 5. Calculated Values Section -->
-        <section class="mb-8 border border-gray-200 rounded-lg p-4 shadow-sm">
-            <h2 class="text-lg font-semibold mb-4 text-emerald-700 border-b pb-2">5. Calculated Elongation & Pressure Limits</h2>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2 text-sm">
-
-                <div class="space-y-2">
-                    <h3 class="font-bold text-gray-700 mt-2">Modified Elongation Calculations (mm)</h3>
-                    <div class="input-group"><span class="input-label">Mod. Elongation for length of strand</span><span class="calculated-value" id="modElongLen">0.000</span></div>
-                    <div class="input-group"><span class="input-label">Mod. Elongation within jack</span><span class="calculated-value" id="modElongJack">0.000</span></div>
-                    <div class="input-group"><span class="input-label font-bold text-blue-600">Modified Total Elongation</span><span class="calculated-value font-bold text-blue-600" id="modElongTotal">0.000</span></div>
-                    <div class="input-group"><span class="input-label">Mod. Elongation for cross sectional area</span><span class="calculated-value" id="modElongArea">0.000</span></div>
-                    <div class="input-group"><span class="input-label font-extrabold text-base text-emerald-600">Final Design Elongation ($L_{Final}$ - mm)</span><span class="calculated-value font-extrabold text-base text-emerald-600" id="designElongFinal">0.000</span></div>
-
-                </div>
-
-                <div class="space-y-2">
-                    <h3 class="font-bold text-gray-700 mt-2">Required Pressure Baselines (kg/cm²)</h3>
-                    <div class="input-group"><span class="input-label font-bold text-blue-600">Modified Min. Jacking Pressure ($P_{Min}$)</span><span class="calculated-value font-bold text-blue-600" id="pressureMin">0.000</span></div>
-                    <div class="input-group"><span class="input-label font-bold text-blue-600">Modified Max. Jacking Pressure ($P_{Max}$)</span><span class="calculated-value font-bold text-blue-600" id="pressureMax">0.000</span></div>
-
-                    <h3 class="font-bold text-gray-700 mt-4">Required Pressure Limits (±5%, kg/cm²)</h3>
-                    
-                    <div class="input-group"><span class="input-label text-red-500">P_Min Lower Limit (0.95 × $P_{Min}$)</span><span class="calculated-value text-red-500" id="pressureMinLowerLimit">0.000</span></div>
-                    <div class="input-group"><span class="input-label text-red-500">P_Min Upper Limit (1.05 × $P_{Min}$)</span><span class="calculated-value text-red-500" id="pressureMinUpperLimit">0.000</span></div>
-                    
-                    <div class="input-group"><span class="input-label text-red-500">P_Max Lower Limit (0.95 × $P_{Max}$)</span><span class="calculated-value text-red-500" id="pressureMaxLowerLimit">0.000</span></div>
-                    <div class="input-group"><span class="input-label text-red-500">P_Max Upper Limit (1.05 × $P_{Max}$)</span><span class="calculated-value text-red-500" id="pressureMaxUpperLimit">0.000</span></div>
-                </div>
-            </div>
-        </section>
-        
-        <!-- 6. Final Elongation Check Summary -->
-        <section class="mb-8 p-4 bg-yellow-50 rounded-lg border-2 border-yellow-300 shadow-sm">
-            <h2 class="text-lg font-bold text-yellow-800 mb-3">6. Final Elongation Limits (±5% of Final Design)</h2>
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm font-semibold">
-                <div class="p-3 bg-white rounded-md shadow-inner text-center">
-                    <p class="text-xs text-gray-500">Min. Allowable Elongation (mm)</p>
-                    <p class="text-lg text-red-600" id="elongMin">0.000</p>
-                </div>
-                <div class="p-3 bg-white rounded-md shadow-inner text-center">
-                    <p class="text-xs text-gray-500">Final Design Elongation (mm)</p>
-                    <p class="text-lg text-emerald-600" id="designElongFinal_summary">0.000</p>
-                </div>
-                <div class="p-3 bg-white rounded-md shadow-inner text-center">
-                    <p class="text-xs text-gray-500">Max. Allowable Elongation (mm)</p>
-                    <p class="text-lg text-red-600" id="elongMax">0.000</p>
-                </div>
-            </div>
-        </section>
-
-
-        <!-- 7. Stressing Chart Section -->
-        <section class="mb-8 border border-gray-200 rounded-lg p-4 shadow-sm">
-            <h2 class="text-lg font-semibold mb-4 text-emerald-700 border-b pb-2">7. Stressing Chart Readings</h2>
-
-            <div class="overflow-x-auto mb-4">
-                <table class="min-w-full border-collapse border border-gray-300 text-sm">
-                    <thead>
-                        <tr class="header-bg">
-                            <th class="p-2 border-r border-gray-700" rowspan="2">SI. No</th>
-                            <th class="p-2 border-r border-gray-700" rowspan="2" colspan="2">Pressure (kg/cm²)</th>
-                            <th class="p-2 border-r border-gray-700" colspan="3">End 1 Elongation (mm)</th>
-                            <th class="p-2 border-r border-gray-700" colspan="3">End 2 Elongation (mm)</th>
-                            <th class="p-2" rowspan="2">Avg. Elongation (mm)</th>
-                        </tr>
-                        <tr class="header-bg text-xs">
-                            <th class="p-2 border-r border-gray-700 print-hidden">Ram Reading (Input)</th>
-                            <th class="p-2 border-r border-gray-700 hidden print:table-cell">Ram Reading</th>
-                            <th class="p-2 border-r border-gray-700">Diff</th>
-                            <th class="p-2 border-r border-gray-700">Cum</th>
-                            <th class="p-2 border-r border-gray-700 print-hidden">Ram Reading (Input)</th>
-                            <th class="p-2 border-r border-gray-700 hidden print:table-cell">Ram Reading</th>
-                            <th class="p-2 border-r border-gray-700">Diff</th>
-                            <th class="p-2 border-r border-gray-700">Cum</th>
-                        </tr>
-                    </thead>
-                    <tbody id="chartBody">
-                        <!-- Chart rows and the final release row will be injected here by JavaScript -->
-                    </tbody>
-                </table>
-            </div>
-            
-            <div class="flex justify-end space-x-2 print-hidden">
-                <button onclick="window.removeLastRow()" class="px-4 py-2 bg-red-500 text-white font-semibold rounded-lg hover:bg-red-600 transition duration-150 shadow-md">Remove Last Row</button>
-                <button onclick="window.addRow()" class="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition duration-150 shadow-md">Add Pressure Reading</button>
-            </div>
-        </section>
-
-        <!-- 8. Final Results & Status (Updated to include both checks) -->
-        <section class="p-4 bg-emerald-50 rounded-lg border-2 border-emerald-300">
-            <h2 class="text-lg font-bold text-emerald-800 mb-3">8. Final Checks & Stressing Status</h2>
-
-            <!-- Final Pressure/Locking Pressure -->
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2 text-sm mb-4 border-b pb-4">
-                <div class="input-group">
-                    <span class="input-label font-extrabold text-base text-emerald-600">Final Stressing Pressure Used (kg/cm²)</span>
-                    <span class="calculated-value font-extrabold text-base text-emerald-600" id="finalPressureUsedDisplay">0</span>
-                </div>
-                <div class="input-group">
-                    <span class="input-label font-extrabold text-base text-purple-600">Calculated Locking Pressure (0.75 P)</span>
-                    <span class="calculated-value font-extrabold text-base text-purple-600" id="lockingPressure">0.000</span>
-                </div>
-            </div>
-
-            <!-- Elongation Status Check (AT MAX PRESSURE) -->
-            <h3 class="text-base font-bold text-emerald-700 mb-2">1. Elongation Check (At Max Pressure, Before Set)</h3>
-            <div class="flex flex-col md:flex-row justify-between items-start md:items-center text-lg font-semibold mb-4 border-b pb-4">
-                <div class="flex items-center space-x-2">
-                    <span class="text-gray-700">Average Elongation AT Max Pressure (mm):</span>
-                    <span id="finalElongation" class="text-xl font-extrabold text-blue-700">N/A</span>
-                </div>
-                <div class="flex items-center space-x-2 mt-2 md:mt-0">
-                    <span class="text-gray-700">Status:</span>
-                    <span id="elongationStatus" class="text-lg md:text-xl font-extrabold text-gray-700">LOADING...</span>
-                </div>
-            </div>
-
-            <!-- Post-Stressing Set/Loss Checks (2 checks: Set Limit & Final Elongation Tolerance) -->
-            <h3 class="text-base font-bold text-red-700 mt-4 mb-3">2. Post-Stressing Set/Loss Checks</h3>
-
-            <!-- Check A: Actual Set/Loss (Draw-in) Limit Check (8mm) -->
-            <div class="border border-red-200 p-3 rounded-lg mb-4 bg-red-50">
-                <p class="font-bold text-red-800 mb-1">Check A: Anchorage Set/Loss (Draw-in) Limit Check (≤ 8 mm)</p>
-                <div class="flex flex-col md:flex-row justify-between items-start md:items-center text-sm font-semibold">
-                    <span class="text-gray-700">Calculated Average Set/Loss (mm): <span class="text-xl font-extrabold text-red-700" id="release.setLoss">N/A</span></span>
-                    <span class="text-gray-700">Status:</span>
-                    <span id="setLossStatus" class="text-lg md:text-xl font-extrabold text-gray-700">LOADING...</span>
-                </div>
-            </div>
-            
-            <!-- Check B: Final Elongation Tolerance Check (After Set/Loss) -->
-            <div class="border border-purple-200 p-3 rounded-lg mb-4 bg-purple-50">
-                <p class="font-bold text-purple-800 mb-1">Check B: Final Elongation Tolerance Check (After Set/Loss)</p>
-                <div class="flex flex-col md:flex-row justify-between items-start md:items-center text-sm font-semibold">
-                    <span class="text-gray-700">Final Elongation AFTER Set/Loss (mm): <span class="text-xl font-extrabold text-purple-700" id="finalElongationAfterSetLoss">N/A</span></span>
-                    <span class="text-gray-700">Status:</span>
-                    <span id="finalElongationAfterSetLossStatus" class="text-lg md:text-xl font-extrabold text-gray-700">LOADING...</span>
-                </div>
-            </div>
-            
-        </section>
-
-        <footer class="mt-8 text-center text-xs text-gray-400 pt-4 border-t">
-            Data is saved in real-time and shared collaboratively via Firestore.
-        </footer>
-    </div>
-
 </body>
 </html>
