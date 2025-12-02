@@ -65,16 +65,6 @@
             .bg-yellow-100 { background-color: #fef3c7 !important; print-color-adjust: exact; }
             .bg-emerald-50 { background-color: #ecfdf5 !important; print-color-adjust: exact; }
             
-            /* Display only the final calculated values for inputs */
-            .input-group .input-field { 
-                display: none !important; 
-            }
-            .input-group:not(:has(.calculated-value)) .input-label {
-                /* For inputs without a calculated span, display the label and its sibling */
-                flex-grow: 0;
-                margin-right: 1rem;
-            }
-
             /* Display value next to its label for input fields */
             .input-group::after {
                 content: attr(data-value); /* Use a data attribute to store the input value */
@@ -84,12 +74,22 @@
             
             /* Ensure the print content is not clipped */
             .p-4, .p-6, .md\:p-10 { padding: 0.5rem !important; }
+            
+            /* Make inline spans visible in print */
+            .hidden.print\:inline {
+                display: inline !important;
+            }
+            
+            /* Ensure the table cell still contains a value in print mode */
+            .table-input.print-hidden {
+                 /* Hide the input field */
+                 display: none !important;
+            }
         }
     </style>
 </head>
 <body class="p-4 md:p-8">
 
-    <!-- Firebase Imports and Setup -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
@@ -165,7 +165,7 @@
             },
             designValues: {
                 gripLengthDesign: 750, // Design Grip Length (mm)
-                modulusEDesign: 196.34, // Design Modulus of Elasticity (kN/mm²)
+                modulusEDesign: 195, // Design Modulus of Elasticity (kN/mm²)
                 strandAreaDesign: 100, // Design Area of strand (mm²)
                 strandLengthDesign: 24.376, // Design Length of strand (m)
                 jackForceMin: 1642, // Design Jack Force Min (kN)
@@ -177,7 +177,7 @@
             },
             actualValues: {
                 gripLengthActual: 750, // Actual Grip Length (mm)
-                modulusEActual: 195, // Actual Modulus of Elasticity (kN/mm²)
+                modulusEActual: 196.34, // Actual Modulus of Elasticity (kN/mm²)
                 strandAreaActual: 99.67, // Actual Area of strand (mm²)
                 strandLengthActual: 24.436, // Actual Length of strand (m)
             },
@@ -187,14 +187,14 @@
                 { pressure: 100, ramEnd1: 36, ramEnd2: 42 },
                 { pressure: 150, ramEnd1: 53, ramEnd2: 49 },
                 { pressure: 200, ramEnd1: 72, ramEnd2: 54 },
-                { pressure: 250, ramEnd1: 83, ramEnd2: 65 },
+                { pressure: 250, ramEnd1: 83, ramEnd2: 69 },
                 { pressure: 300, ramEnd1: 99, ramEnd2: 84 },
                 { pressure: 350, ramEnd1: 111, ramEnd2: 94 },
                 { pressure: 360, ramEnd1: 117, ramEnd2: 97 }, // Final reading at P=360
             ],
             releaseReading: {
-                ramEnd1: 10, 
-                ramEnd2: 8, 
+                ramEnd1: 111, 
+                ramEnd2: 88, 
                 calculated: {}
             },
             calculatedResults: {}
@@ -292,7 +292,7 @@
                 let ram50_2 = findRamReading(BASE_PRESSURE, 'ramEnd2');
 
                 // --- End 1 Calculation ---
-                if (reading.pressure < START_PRESSURE) {
+                if (reading.pressure < START_PRESSURE) { // START_PRESSURE = 250
                     diffEnd1 = 0;
                     cumEnd1 = 0;
                 } else if (reading.pressure === START_PRESSURE) {
@@ -305,6 +305,8 @@
                         diffEnd1 = reading.ramEnd1 - findRamReading(prevReading.pressure, 'ramEnd1');
                         cumEnd1 = prevCumEnd1 + diffEnd1;
                     } else {
+                        // This branch handles cases where P > 250 but P=250 reading was missed.
+                        // For safety, it will carry over the previous cumulative value.
                         cumEnd1 = prevCumEnd1; 
                     }
                 }
@@ -331,7 +333,11 @@
                 prevCumEnd1 = cumEnd1;
                 prevCumEnd2 = cumEnd2;
 
-                const avgCum = (cumEnd1 + cumEnd2) / 2;
+                // Only average if pressure is at or above START_PRESSURE
+                let avgCum = 0;
+                if (reading.pressure >= START_PRESSURE) {
+                    avgCum = (cumEnd1 + cumEnd2) / 2;
+                }
 
                 processedChart.push({
                     ...reading,
@@ -466,7 +472,7 @@
                     // Set data-value attribute on parent div for printing
                     if (el.closest('.input-group') && (el.tagName === 'INPUT' || el.tagName === 'SPAN')) {
                          const displayValue = (typeof val === 'number' && val !== 0) ? val.toFixed(3) : val;
-                         el.closest('.input-group').setAttribute('data-value', displayValue || '');
+                         el.closest('.input-group').setAttribute('data-value', displayValue || (val === 0 ? '0' : ''));
                     }
                 }
             });
@@ -557,40 +563,35 @@
                 const cum1Display = isCalculated ? reading.cumEnd1.toFixed(3) : '0.000';
                 const diff2Display = isCalculated ? reading.diffEnd2.toFixed(3) : '0.000';
                 const cum2Display = isCalculated ? reading.cumEnd2.toFixed(3) : '0.000';
-                const avgCumDisplay = isCalculated ? reading.avgCum.toFixed(3) : '0.000';
+                
+                // avgCumDisplay is now correctly calculated for P >= 250 and 0 for P < 250
+                const avgCumDisplay = isCalculated ? reading.avgCum.toFixed(3) : '0.000'; 
 
 
                 tr.innerHTML = `
                     <td class="p-2 border border-gray-200">${index + 1}</td>
-                    <td class="p-2 border border-gray-200 print-hidden">
-                        <input type="number" step="1" data-row="${index}" data-key="pressure" value="${reading.pressure}" class="table-input" onchange="window.handleChartInputChange(event)">
-                        <span class="print-only">${reading.pressure}</span>
-                    </td>
-                    <td class="p-2 border border-gray-200 hidden print:table-cell text-center">${reading.pressure}</td>
-
-                    <!-- End 1: Ram Reading -->
-                    <td class="p-2 border border-gray-200 print-hidden">
-                        <input type="number" step="1" data-row="${index}" data-key="ramEnd1" value="${reading.ramEnd1}" class="table-input" onchange="window.handleChartInputChange(event)">
-                    </td>
-                    <td class="p-2 border border-gray-200 text-right hidden print:table-cell">${reading.ramEnd1}</td>
                     
-                    <!-- End 1: Diff (Calculated) -->
+                    <td class="p-2 border border-gray-200 text-center">
+                        <input type="number" step="1" data-row="${index}" data-key="pressure" value="${reading.pressure}" class="table-input print-hidden" onchange="window.handleChartInputChange(event)">
+                        <span class="hidden print:inline">${reading.pressure}</span>
+                    </td>
+
+                    <td class="p-2 border border-gray-200 text-center">
+                        <input type="number" step="1" data-row="${index}" data-key="ramEnd1" value="${reading.ramEnd1}" class="table-input print-hidden" onchange="window.handleChartInputChange(event)">
+                        <span class="hidden print:inline">${reading.ramEnd1}</span>
+                    </td>
+                    
                     <td class="p-2 border border-gray-200 text-right">${diff1Display}</td>
-                    <!-- End 1: Cum (Calculated) -->
                     <td class="p-2 border border-gray-200 text-right font-semibold">${cum1Display}</td>
 
-                    <!-- End 2: Ram Reading -->
-                    <td class="p-2 border border-gray-200 print-hidden">
-                        <input type="number" step="1" data-row="${index}" data-key="ramEnd2" value="${reading.ramEnd2}" class="table-input" onchange="window.handleChartInputChange(event)">
+                    <td class="p-2 border border-gray-200 text-center">
+                        <input type="number" step="1" data-row="${index}" data-key="ramEnd2" value="${reading.ramEnd2}" class="table-input print-hidden" onchange="window.handleChartInputChange(event)">
+                        <span class="hidden print:inline">${reading.ramEnd2}</span>
                     </td>
-                    <td class="p-2 border border-gray-200 text-right hidden print:table-cell">${reading.ramEnd2}</td>
 
-                    <!-- End 2: Diff (Calculated) -->
                     <td class="p-2 border border-gray-200 text-right">${diff2Display}</td>
-                    <!-- End 2: Cum (Calculated) -->
                     <td class="p-2 border border-gray-200 text-right font-semibold">${cum2Display}</td>
                     
-                    <!-- Avg. Elongation (Calculated) -->
                     <td class="p-2 border border-gray-200 text-right font-extrabold text-blue-800">${avgCumDisplay}</td>
                 `;
                 chartBody.appendChild(tr);
@@ -604,31 +605,25 @@
 
             finalRow.innerHTML = `
                 <td class="p-2 border border-yellow-500 text-center">${R.chartProcessed.length + 1}</td>
-                <td class="p-2 border border-yellow-500 text-center text-red-700" colspan="2">FINAL (After Release)</td>
                 
-                <!-- End 1: Ram Reading (Input) -->
-                <td class="p-2 border border-yellow-500 print-hidden">
-                    <input type="number" step="1" name="releaseReading.ramEnd1" value="${reportData.releaseReading.ramEnd1}" class="table-input bg-yellow-50" onchange="window.handleInputChange(event)">
+                <td class="p-2 border border-yellow-500 text-center text-red-700">FINAL (After Release)</td> 
+                
+                <td class="p-2 border border-yellow-500 text-center">
+                    <input type="number" step="1" name="releaseReading.ramEnd1" value="${reportData.releaseReading.ramEnd1}" class="table-input bg-yellow-50 print-hidden" onchange="window.handleInputChange(event)">
+                    <span class="hidden print:inline">${reportData.releaseReading.ramEnd1}</span>
                 </td>
-                <td class="p-2 border border-yellow-500 text-right hidden print:table-cell">${reportData.releaseReading.ramEnd1}</td>
 
-                <!-- End 1: Diff (Calculated - Set/Loss) -->
                 <td class="p-2 border border-yellow-500 text-right">${releaseCalculated.diffEnd1?.toFixed(3) || 'N/A'}</td>
-                <!-- End 1: Cum (Calculated) -->
                 <td class="p-2 border border-yellow-500 text-right">${releaseCalculated.cumEnd1?.toFixed(3) || 'N/A'}</td>
 
-                <!-- End 2: Ram Reading (Input) -->
-                <td class="p-2 border border-yellow-500 print-hidden">
-                    <input type="number" step="1" name="releaseReading.ramEnd2" value="${reportData.releaseReading.ramEnd2}" class="table-input bg-yellow-50" onchange="window.handleInputChange(event)">
+                <td class="p-2 border border-yellow-500 text-center">
+                    <input type="number" step="1" name="releaseReading.ramEnd2" value="${reportData.releaseReading.ramEnd2}" class="table-input bg-yellow-50 print-hidden" onchange="window.handleInputChange(event)">
+                    <span class="hidden print:inline">${reportData.releaseReading.ramEnd2}</span>
                 </td>
-                <td class="p-2 border border-yellow-500 text-right hidden print:table-cell">${reportData.releaseReading.ramEnd2}</td>
 
-                <!-- End 2: Diff (Calculated - Set/Loss) -->
                 <td class="p-2 border border-yellow-500 text-right">${releaseCalculated.diffEnd2?.toFixed(3) || 'N/A'}</td>
-                <!-- End 2: Cum (Calculated) -->
                 <td class="p-2 border border-yellow-500 text-right">${releaseCalculated.cumEnd2?.toFixed(3) || 'N/A'}</td>
                 
-                <!-- Avg. Elongation (Calculated) -->
                 <td class="p-2 border border-yellow-500 text-right text-red-700">${releaseCalculated.avgCum?.toFixed(3) || 'N/A'}</td>
             `;
             chartBody.appendChild(finalRow);
@@ -796,7 +791,6 @@
             <p id="userIdDisplay" class="text-sm text-gray-500 mt-1">User ID: Loading...</p>
         </header>
         
-        <!-- PDF Generation Button -->
         <div class="print-hidden mb-6 flex justify-center">
             <button onclick="window.generatePdf()" class="flex items-center space-x-2 px-6 py-3 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 transition duration-150 shadow-lg">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-6 h-6">
@@ -807,47 +801,44 @@
             </button>
         </div>
         
-        <!-- 1. Project Details Section -->
         <section class="mb-8 border border-gray-200 rounded-lg p-4 shadow-sm">
             <h2 class="text-lg font-semibold mb-4 text-emerald-700 border-b pb-2">1. Project & Cable Details</h2>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2 text-sm">
-                <div class="input-group"><span class="input-label">Location</span><input type="text" name="projectDetails.location" class="input-field max-w-full print-hidden" onchange="window.handleInputChange(event)"></div>
-                <div class="input-group"><span class="input-label">Report/Girder No.</span><input type="text" name="projectDetails.reportNo" class="input-field max-w-full print-hidden" onchange="window.handleInputChange(event)"></div>
-                <div class="input-group"><span class="input-label">Date of Stressing (Today)</span><input type="date" name="projectDetails.date" class="input-field max-w-full print-hidden" onchange="window.handleInputChange(event)"></div>
-                <div class="input-group"><span class="input-label">Girder Length (m)</span><input type="number" step="0.01" name="projectDetails.girderLength" class="input-field print-hidden" onchange="window.handleInputChange(event)"></div>
-                <div class="input-group"><span class="input-label">Date of Casting</span><input type="date" name="projectDetails.dateOfCasting" class="input-field max-w-full print-hidden" onchange="window.handleInputChange(event)"></div>
-                <div class="input-group"><span class="input-label">Age (days)</span><span data-bind="projectDetails.age" class="calculated-value font-bold text-gray-700">0</span></div>
-                <div class="input-group"><span class="input-label">Strength of Conc. ($N/mm^2$)</span><input type="number" step="1" name="projectDetails.concStrength" class="input-field print-hidden" onchange="window.handleInputChange(event)"></div>
-                <div class="input-group"><span class="input-label">Stressing Cable No.</span><input type="number" step="1" name="projectDetails.cableNo" class="input-field print-hidden" onchange="window.handleInputChange(event)"></div>
-                <div class="input-group"><span class="input-label">HTS Coil No.</span><input type="text" name="projectDetails.htsCoilNo" class="input-field max-w-full print-hidden" onchange="window.handleInputChange(event)"></div>
-                <div class="input-group"><span class="input-label">Start Time</span><input type="time" name="projectDetails.startTime" class="input-field max-w-full print-hidden" onchange="window.handleInputChange(event)"></div>
-                <div class="input-group"><span class="input-label">End Time</span><input type="time" name="projectDetails.endTime" class="input-field max-w-full print-hidden" onchange="window.handleInputChange(event)"></div>
+                <div class="input-group" data-value=""><span class="input-label">Location</span><input type="text" name="projectDetails.location" class="input-field max-w-full print-hidden" onchange="window.handleInputChange(event)"></div>
+                <div class="input-group" data-value=""><span class="input-label">Report/Girder No.</span><input type="text" name="projectDetails.reportNo" class="input-field max-w-full print-hidden" onchange="window.handleInputChange(event)"></div>
+                <div class="input-group" data-value=""><span class="input-label">Date of Stressing (Today)</span><input type="date" name="projectDetails.date" class="input-field max-w-full print-hidden" onchange="window.handleInputChange(event)"></div>
+                <div class="input-group" data-value=""><span class="input-label">Girder Length (m)</span><input type="number" step="0.01" name="projectDetails.girderLength" class="input-field print-hidden" onchange="window.handleInputChange(event)"></div>
+                <div class="input-group" data-value=""><span class="input-label">Date of Casting</span><input type="date" name="projectDetails.dateOfCasting" class="input-field max-w-full print-hidden" onchange="window.handleInputChange(event)"></div>
+                <div class="input-group" data-value=""><span class="input-label">Age (days)</span><span data-bind="projectDetails.age" class="calculated-value font-bold text-gray-700">0</span></div>
+                <div class="input-group" data-value=""><span class="input-label">Strength of Conc. ($N/mm^2$)</span><input type="number" step="1" name="projectDetails.concStrength" class="input-field print-hidden" onchange="window.handleInputChange(event)"></div>
+                <div class="input-group" data-value=""><span class="input-label">Stressing Cable No.</span><input type="number" step="1" name="projectDetails.cableNo" class="input-field print-hidden" onchange="window.handleInputChange(event)"></div>
+                <div class="input-group" data-value=""><span class="input-label">HTS Coil No.</span><input type="text" name="projectDetails.htsCoilNo" class="input-field max-w-full print-hidden" onchange="window.handleInputChange(event)"></div>
+                <div class="input-group" data-value=""><span class="input-label">Start Time</span><input type="time" name="projectDetails.startTime" class="input-field max-w-full print-hidden" onchange="window.handleInputChange(event)"></div>
+                <div class="input-group" data-value=""><span class="input-label">End Time</span><input type="time" name="projectDetails.endTime" class="input-field max-w-full print-hidden" onchange="window.handleInputChange(event)"></div>
             </div>
         </section>
 
-        <!-- 2. Equipment Parameters Section -->
         <section class="mb-8 border border-gray-200 rounded-lg p-4 shadow-sm">
             <h2 class="text-lg font-semibold mb-4 text-emerald-700 border-b pb-2">2. Equipment Parameters</h2>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2 text-sm">
-                <div class="input-group"><span class="input-label">Stressing RAM area (cm²)</span><input type="number" step="0.01" name="equipmentParameters.ramArea" class="input-field print-hidden" onchange="window.handleInputChange(event)"></div>
-                <div class="input-group"><span class="input-label">Jack Efficiency (Ratio, e.g., 0.99)</span><input type="number" step="0.01" name="equipmentParameters.jackEfficiency" class="input-field print-hidden" onchange="window.handleInputChange(event)"></div>
-                <div class="input-group"><span class="input-label">Jack Make and No.</span><input type="text" name="equipmentParameters.jackMakeNo" class="input-field max-w-full print-hidden" onchange="window.handleInputChange(event)"></div>
-                <div class="input-group"><span class="input-label">Pr. Gauge No.</span><input type="text" name="equipmentParameters.prGaugeNo" class="input-field max-w-full print-hidden" onchange="window.handleInputChange(event)"></div>
+                <div class="input-group" data-value=""><span class="input-label">Stressing RAM area (cm²)</span><input type="number" step="0.01" name="equipmentParameters.ramArea" class="input-field print-hidden" onchange="window.handleInputChange(event)"></div>
+                <div class="input-group" data-value=""><span class="input-label">Jack Efficiency (Ratio, e.g., 0.99)</span><input type="number" step="0.01" name="equipmentParameters.jackEfficiency" class="input-field print-hidden" onchange="window.handleInputChange(event)"></div>
+                <div class="input-group" data-value=""><span class="input-label">Jack Make and No.</span><input type="text" name="equipmentParameters.jackMakeNo" class="input-field max-w-full print-hidden" onchange="window.handleInputChange(event)"></div>
+                <div class="input-group" data-value=""><span class="input-label">Pr. Gauge No.</span><input type="text" name="equipmentParameters.prGaugeNo" class="input-field max-w-full print-hidden" onchange="window.handleInputChange(event)"></div>
             </div>
         </section>
         
-        <!-- 3. Design Parameters Section -->
         <section class="mb-8 border border-gray-200 rounded-lg p-4 shadow-sm">
             <h2 class="text-lg font-semibold mb-4 text-emerald-700 border-b pb-2">3. Design Parameters (As Per Drawings)</h2>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2 text-sm">
-                <div class="input-group"><span class="input-label">Grip length within Jack (Design, mm)</span><input type="number" step="1" name="designValues.gripLengthDesign" class="input-field print-hidden" onchange="window.handleInputChange(event)"></div>
-                <div class="input-group"><span class="input-label">Modulus of Elasticity (Design, kN/mm²)</span><input type="number" step="0.01" name="designValues.modulusEDesign" class="input-field print-hidden" onchange="window.handleInputChange(event)"></div>
-                <div class="input-group"><span class="input-label">Area of strand (Design, mm²)</span><input type="number" step="0.01" name="designValues.strandAreaDesign" class="input-field print-hidden" onchange="window.handleInputChange(event)"></div>
-                <div class="input-group"><span class="input-label">Length of Strand (Design, m)</span><input type="number" step="0.001" name="designValues.strandLengthDesign" class="input-field print-hidden" onchange="window.handleInputChange(event)"></div>
-                <div class="input-group"><span class="input-label">Design Jack Force Min (kN)</span><input type="number" step="1" name="designValues.jackForceMin" class="input-field print-hidden" onchange="window.handleInputChange(event)"></div>
-                <div class="input-group"><span class="input-label">Design Jack Force Max (kN)</span><input type="number" step="1" name="designValues.jackForceMax" class="input-field print-hidden" onchange="window.handleInputChange(event)"></div>
-                <div class="input-group"><span class="input-label">Design Elongation Jack (mm)</span><input type="number" step="0.01" name="designValues.elongationJackDesign" class="input-field print-hidden" onchange="window.handleInputChange(event)"></div>
-                <div class="input-group"><span class="input-label">Design Elongation Girder (mm)</span><input type="number" step="0.01" name="designValues.elongationGirderDesign" class="input-field print-hidden" onchange="window.handleInputChange(event)"></div>
+                <div class="input-group" data-value=""><span class="input-label">Grip length within Jack (Design, mm)</span><input type="number" step="1" name="designValues.gripLengthDesign" class="input-field print-hidden" onchange="window.handleInputChange(event)"></div>
+                <div class="input-group" data-value=""><span class="input-label">Modulus of Elasticity (Design, kN/mm²)</span><input type="number" step="0.01" name="designValues.modulusEDesign" class="input-field print-hidden" onchange="window.handleInputChange(event)"></div>
+                <div class="input-group" data-value=""><span class="input-label">Area of strand (Design, mm²)</span><input type="number" step="0.01" name="designValues.strandAreaDesign" class="input-field print-hidden" onchange="window.handleInputChange(event)"></div>
+                <div class="input-group" data-value=""><span class="input-label">Length of Strand (Design, m)</span><input type="number" step="0.001" name="designValues.strandLengthDesign" class="input-field print-hidden" onchange="window.handleInputChange(event)"></div>
+                <div class="input-group" data-value=""><span class="input-label">Design Jack Force Min (kN)</span><input type="number" step="1" name="designValues.jackForceMin" class="input-field print-hidden" onchange="window.handleInputChange(event)"></div>
+                <div class="input-group" data-value=""><span class="input-label">Design Jack Force Max (kN)</span><input type="number" step="1" name="designValues.jackForceMax" class="input-field print-hidden" onchange="window.handleInputChange(event)"></div>
+                <div class="input-group" data-value=""><span class="input-label">Design Elongation Jack (mm)</span><input type="number" step="0.01" name="designValues.elongationJackDesign" class="input-field print-hidden" onchange="window.handleInputChange(event)"></div>
+                <div class="input-group" data-value=""><span class="input-label">Design Elongation Girder (mm)</span><input type="number" step="0.01" name="designValues.elongationGirderDesign" class="input-field print-hidden" onchange="window.handleInputChange(event)"></div>
                 <div class="input-group col-span-1 sm:col-span-2">
                     <span class="input-label font-extrabold text-base text-indigo-600">Total Design Elongation (mm)</span>
                     <span class="calculated-value font-extrabold text-base text-indigo-600" id="elongationTotalDesign">0.000</span>
@@ -855,18 +846,16 @@
             </div>
         </section>
 
-        <!-- 4. Actual Parameters Section -->
         <section class="mb-8 border border-gray-200 rounded-lg p-4 shadow-sm">
             <h2 class="text-lg font-semibold mb-4 text-emerald-700 border-b pb-2">4. Actual Parameters (As Measured)</h2>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2 text-sm">
-                <div class="input-group"><span class="input-label">Grip length within Jack (Actual, mm)</span><input type="number" step="1" name="actualValues.gripLengthActual" class="input-field print-hidden" onchange="window.handleInputChange(event)"></div>
-                <div class="input-group"><span class="input-label">Modulus of Elasticity (Actual, kN/mm²)</span><input type="number" step="0.01" name="actualValues.modulusEActual" class="input-field print-hidden" onchange="window.handleInputChange(event)"></div>
-                <div class="input-group"><span class="input-label">Area of strand (Actual, mm²)</span><input type="number" step="0.01" name="actualValues.strandAreaActual" class="input-field print-hidden" onchange="window.handleInputChange(event)"></div>
-                <div class="input-group"><span class="input-label">Length of Strand (Actual, m)</span><input type="number" step="0.001" name="actualValues.strandLengthActual" class="input-field print-hidden" onchange="window.handleInputChange(event)"></div>
+                <div class="input-group" data-value=""><span class="input-label">Grip length within Jack (Actual, mm)</span><input type="number" step="1" name="actualValues.gripLengthActual" class="input-field print-hidden" onchange="window.handleInputChange(event)"></div>
+                <div class="input-group" data-value=""><span class="input-label">Modulus of Elasticity (Actual, kN/mm²)</span><input type="number" step="0.01" name="actualValues.modulusEActual" class="input-field print-hidden" onchange="window.handleInputChange(event)"></div>
+                <div class="input-group" data-value=""><span class="input-label">Area of strand (Actual, mm²)</span><input type="number" step="0.01" name="actualValues.strandAreaActual" class="input-field print-hidden" onchange="window.handleInputChange(event)"></div>
+                <div class="input-group" data-value=""><span class="input-label">Length of Strand (Actual, m)</span><input type="number" step="0.001" name="actualValues.strandLengthActual" class="input-field print-hidden" onchange="window.handleInputChange(event)"></div>
             </div>
         </section>
 
-        <!-- 5. Calculated Values Section -->
         <section class="mb-8 border border-gray-200 rounded-lg p-4 shadow-sm">
             <h2 class="text-lg font-semibold mb-4 text-emerald-700 border-b pb-2">5. Calculated Elongation & Pressure Limits</h2>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2 text-sm">
@@ -896,8 +885,7 @@
                 </div>
             </div>
         </section>
-        
-        <!-- 6. Final Elongation Check Summary -->
+
         <section class="mb-8 p-4 bg-yellow-50 rounded-lg border-2 border-yellow-300 shadow-sm">
             <h2 class="text-lg font-bold text-yellow-800 mb-3">6. Final Elongation Limits (±5% of Final Design)</h2>
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm font-semibold">
@@ -917,7 +905,6 @@
         </section>
 
 
-        <!-- 7. Stressing Chart Section -->
         <section class="mb-8 border border-gray-200 rounded-lg p-4 shadow-sm">
             <h2 class="text-lg font-semibold mb-4 text-emerald-700 border-b pb-2">7. Stressing Chart Readings</h2>
 
@@ -926,25 +913,28 @@
                     <thead>
                         <tr class="header-bg">
                             <th class="p-2 border-r border-gray-700" rowspan="2">SI. No</th>
-                            <th class="p-2 border-r border-gray-700" rowspan="2" colspan="2">Pressure (kg/cm²)</th>
+                            
+                            <th class="p-2 border-r border-gray-700" rowspan="2">Pressure (kg/cm²)</th> 
+                            
                             <th class="p-2 border-r border-gray-700" colspan="3">End 1 Elongation (mm)</th>
-                            <th class="p-2 border-r border-gray-700" colspan="3">End 2 Elongation (mm)</th>
-                            <th class="p-2" rowspan="2">Avg. Elongation (mm)</th>
+                            
+                            <th class="p-2 border-r border-gray-700" colspan="3">End 2 Elongation (mm)</th> 
+                            
+                            <th class="p-2" rowspan="2">Avg. Elongation (mm)</th> 
                         </tr>
                         <tr class="header-bg text-xs">
-                            <th class="p-2 border-r border-gray-700 print-hidden">Ram Reading (Input)</th>
-                            <th class="p-2 border-r border-gray-700 hidden print:table-cell">Ram Reading</th>
+                            <th class="p-2 border-r border-gray-700">Ram Reading (Input)</th>
                             <th class="p-2 border-r border-gray-700">Diff</th>
                             <th class="p-2 border-r border-gray-700">Cum</th>
-                            <th class="p-2 border-r border-gray-700 print-hidden">Ram Reading (Input)</th>
-                            <th class="p-2 border-r border-gray-700 hidden print:table-cell">Ram Reading</th>
+                            
+                            <th class="p-2 border-r border-gray-700">Ram Reading (Input)</th>
                             <th class="p-2 border-r border-gray-700">Diff</th>
                             <th class="p-2 border-r border-gray-700">Cum</th>
-                        </tr>
+                            
+                            </tr>
                     </thead>
                     <tbody id="chartBody">
-                        <!-- Chart rows and the final release row will be injected here by JavaScript -->
-                    </tbody>
+                        </tbody>
                 </table>
             </div>
             
@@ -954,11 +944,9 @@
             </div>
         </section>
 
-        <!-- 8. Final Results & Status (Updated to include both checks) -->
         <section class="p-4 bg-emerald-50 rounded-lg border-2 border-emerald-300">
             <h2 class="text-lg font-bold text-emerald-800 mb-3">8. Final Checks & Stressing Status</h2>
 
-            <!-- Final Pressure/Locking Pressure -->
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2 text-sm mb-4 border-b pb-4">
                 <div class="input-group">
                     <span class="input-label font-extrabold text-base text-emerald-600">Final Stressing Pressure Used (kg/cm²)</span>
@@ -970,7 +958,6 @@
                 </div>
             </div>
 
-            <!-- Elongation Status Check (AT MAX PRESSURE) -->
             <h3 class="text-base font-bold text-emerald-700 mb-2">1. Elongation Check (At Max Pressure, Before Set)</h3>
             <div class="flex flex-col md:flex-row justify-between items-start md:items-center text-lg font-semibold mb-4 border-b pb-4">
                 <div class="flex items-center space-x-2">
@@ -983,10 +970,8 @@
                 </div>
             </div>
 
-            <!-- Post-Stressing Set/Loss Checks (2 checks: Set Limit & Final Elongation Tolerance) -->
             <h3 class="text-base font-bold text-red-700 mt-4 mb-3">2. Post-Stressing Set/Loss Checks</h3>
 
-            <!-- Check A: Actual Set/Loss (Draw-in) Limit Check (8mm) -->
             <div class="border border-red-200 p-3 rounded-lg mb-4 bg-red-50">
                 <p class="font-bold text-red-800 mb-1">Check A: Anchorage Set/Loss (Draw-in) Limit Check (≤ 8 mm)</p>
                 <div class="flex flex-col md:flex-row justify-between items-start md:items-center text-sm font-semibold">
@@ -996,7 +981,6 @@
                 </div>
             </div>
             
-            <!-- Check B: Final Elongation Tolerance Check (After Set/Loss) -->
             <div class="border border-purple-200 p-3 rounded-lg mb-4 bg-purple-50">
                 <p class="font-bold text-purple-800 mb-1">Check B: Final Elongation Tolerance Check (After Set/Loss)</p>
                 <div class="flex flex-col md:flex-row justify-between items-start md:items-center text-sm font-semibold">
