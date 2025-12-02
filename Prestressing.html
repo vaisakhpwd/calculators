@@ -8,7 +8,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Inter', sans-serif; background-color: #f7fafc; }
-        /* Style for data entry groups */
+        /* Style for data entry groups in the details sections */
         .input-group { 
             display: flex; 
             align-items: center; 
@@ -32,20 +32,27 @@
             font-family: monospace;
             width: 100%;
         }
-        /* Style for table inputs */
-        .table-input { 
+        /* Style for mobile-friendly input panel */
+        .mobile-input-field { 
             width: 100%; 
-            padding: 0.25rem; 
-            text-align: center; 
-            border-radius: 0.25rem; 
-            border: 1px solid #d1d5db; 
+            padding: 0.75rem 1rem; 
+            font-size: 1.125rem;
+            text-align: right;
+            border-radius: 0.5rem; 
+            border: 2px solid #a7f3d0; 
+            transition: border-color 0.2s;
         }
+        .mobile-input-field:focus {
+            border-color: #059669;
+            box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.4);
+        }
+
         .header-bg { 
             background-color: #1a202c; 
             color: white; 
         }
 
-        /* --- PDF/PRINT STYLING (Hides inputs for clean PDF output) --- */
+        /* --- PDF/PRINT STYLING --- */
         @media print {
             body { 
                 background-color: white !important; 
@@ -54,69 +61,53 @@
             }
             .max-w-4xl { max-width: 100%; margin: 0; padding: 0; box-shadow: none; }
             header, footer, .print-hidden { display: none !important; }
-            /* Show calculated spans instead of input fields */
-            input, button { display: none !important; }
+            input, button, .action-buttons { display: none !important; }
             .input-group input { display: none; }
             .input-group span { display: block !important; }
             
-            /* Ensure tables and borders are visible for professional look */
             table, th, td { border-color: #000 !important; }
             .header-bg { background-color: #e5e7eb !important; color: #1f2937 !important; print-color-adjust: exact; }
             .bg-yellow-100 { background-color: #fef3c7 !important; print-color-adjust: exact; }
             .bg-emerald-50 { background-color: #ecfdf5 !important; print-color-adjust: exact; }
             
-            /* Display value next to its label for input fields */
             .input-group::after {
-                content: attr(data-value); /* Use a data attribute to store the input value */
+                content: attr(data-value);
                 font-weight: bold;
                 color: #1f2937;
             }
             
-            /* Ensure the print content is not clipped */
             .p-4, .p-6, .md\:p-10 { padding: 0.5rem !important; }
             
-            /* Make inline spans visible in print */
             .hidden.print\:inline {
                 display: inline !important;
-            }
-            
-            /* Ensure the table cell still contains a value in print mode */
-            .table-input.print-hidden {
-                 /* Hide the input field */
-                 display: none !important;
             }
         }
     </style>
 </head>
 <body class="p-4 md:p-8">
 
+    <!-- Firebase Imports and Setup -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
 
-        // --- Global Constants ---
+        // --- Global Constants & State ---
         const REPORT_DOCUMENT_ID = 'current_stressing_report';
         const APP_ID = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
         const FIREBASE_CONFIG = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
         const INITIAL_AUTH_TOKEN = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
         
-        // Custom Calculation Constants
         const START_PRESSURE = 250;
         const BASE_PRESSURE = 50;
         const SET_LOSS_LIMIT = 8; // Anchorage set/loss limit in mm
 
-        // Global Firebase Vars
         let db;
         let auth;
         let userId = 'anonymous';
+        let editingRowIndex = -1; // -1 means adding a new row, >= 0 means editing an existing row
 
-        // Utility: Convert kN to kg/cm2
-        // Pressure (kg/cm²) = (Force_kN × 1000 / 9.81) / (RamArea × Efficiency)
-        const kNToKgPerCm2 = (forceKN, ramArea, efficiency) => (forceKN * 1000 / 9.81) / (ramArea * efficiency);
-
-        // Utility: Date calculation function
         const getInitialDates = () => {
             const today = new Date();
             const formatDate = (date) => {
@@ -128,13 +119,9 @@
             };
             
             const stressingDate = formatDate(today);
-
-            // Calculate Casting Date (28 days before for a good default)
             const castingDateObj = new Date(today);
             castingDateObj.setDate(today.getDate() - 28);
             const dateOfCasting = formatDate(castingDateObj);
-
-            // Calculate initial age in days (using default dates)
             const ageInDays = Math.ceil((today.getTime() - castingDateObj.getTime()) / (1000 * 60 * 60 * 24));
 
             return { stressingDate, dateOfCasting, ageInDays };
@@ -147,61 +134,73 @@
             projectDetails: {
                 location: 'Gandhibhavan Kochikkadavu Bridge',
                 reportNo: 'A1-P1 L',
-                date: stressingDate, // Stressing Date
+                date: stressingDate, 
                 girderLength: 24.56,
                 startTime: '17:07', 
                 dateOfCasting: dateOfCasting, 
                 endTime: '17:16', 
-                age: ageInDays, // Dynamic calculation
+                age: ageInDays, 
                 concStrength: 45,
                 cableNo: 3,
                 htsCoilNo: 'C012345', 
             },
             equipmentParameters: {
                 ramArea: 468.6,
-                jackEfficiency: 0.99, // Stored as a ratio (e.g., 99% -> 0.99)
+                jackEfficiency: 0.99, 
                 jackMakeNo: 'J-KORE-01',
                 prGaugeNo: 'G-PUCK-05',
             },
             designValues: {
-                gripLengthDesign: 750, // Design Grip Length (mm)
-                modulusEDesign: 195, // Design Modulus of Elasticity (kN/mm²)
-                strandAreaDesign: 100, // Design Area of strand (mm²)
-                strandLengthDesign: 24.376, // Design Length of strand (m)
-                jackForceMin: 1642, // Design Jack Force Min (kN)
-                jackForceMax: 1667, // Design Jack Force Max (kN)
-                elongationJackDesign: 84.38, // Design Elongation Jack (mm)
-                elongationGirderDesign: 5.4, // Design Elongation Girder (mm)
+                gripLengthDesign: 750, 
+                modulusEDesign: 196.34, 
+                strandAreaDesign: 100, 
+                strandLengthDesign: 24.376, 
+                jackForceMin: 1642, 
+                jackForceMax: 1667, 
+                elongationJackDesign: 84.38, 
+                elongationGirderDesign: 5.4, 
                 elongationTotalDesign: 0, 
                 finalPressureUsed: 360 
             },
             actualValues: {
-                gripLengthActual: 750, // Actual Grip Length (mm)
-                modulusEActual: 196.34, // Actual Modulus of Elasticity (kN/mm²)
-                strandAreaActual: 99.67, // Actual Area of strand (mm²)
-                strandLengthActual: 24.436, // Actual Length of strand (m)
+                gripLengthActual: 750, 
+                modulusEActual: 195, 
+                strandAreaActual: 99.67, 
+                strandLengthActual: 24.436, 
             },
             chartReadings: [
                 { pressure: 10, ramEnd1: 11, ramEnd2: 9 },
                 { pressure: 50, ramEnd1: 31, ramEnd2: 21 },
-                { pressure: 100, ramEnd1: 36, ramEnd2: 42 },
-                { pressure: 150, ramEnd1: 53, ramEnd2: 49 },
-                { pressure: 200, ramEnd1: 72, ramEnd2: 54 },
-                { pressure: 250, ramEnd1: 83, ramEnd2: 69 },
                 { pressure: 300, ramEnd1: 99, ramEnd2: 84 },
-                { pressure: 350, ramEnd1: 111, ramEnd2: 94 },
-                { pressure: 360, ramEnd1: 117, ramEnd2: 97 }, // Final reading at P=360
+                { pressure: 360, ramEnd1: 117, ramEnd2: 97 }, 
             ],
             releaseReading: {
-                ramEnd1: 111, 
-                ramEnd2: 88, 
+                ramEnd1: 10, 
+                ramEnd2: 8, 
                 calculated: {}
             },
             calculatedResults: {}
         };
 
-        // --- Core Calculation Logic ---
+        // Utility: Convert kN to kg/cm2
+        const kNToKgPerCm2 = (forceKN, ramArea, efficiency) => (forceKN * 1000 / 9.81) / (ramArea * efficiency);
+
+        // Utility: Date calculation function
+        const calculateAge = (stressingDateStr, castingDateStr) => {
+             const dateStressing = new Date(stressingDateStr);
+             const dateCasting = new Date(castingDateStr);
+
+            if (!isNaN(dateStressing) && !isNaN(dateCasting) && dateStressing.getTime() >= dateCasting.getTime()) {
+                const diffTime = Math.abs(dateStressing.getTime() - dateCasting.getTime());
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                return diffDays;
+            } 
+            return 0;
+        }
+
+        // --- Core Calculation Logic (Same as before) ---
         const calculateReport = (data) => {
+            // ... (Calculations logic remains identical to previous version) ...
             const EV = data.equipmentParameters;
             const DV = data.designValues;
             const AV = data.actualValues;
@@ -212,7 +211,6 @@
 
             const R = {}; // Results
 
-            // ** MODIFICATION: Set Final Stressing Pressure to Max Pressure in Table **
             const maxPressure = data.chartReadings.reduce((max, r) => Math.max(max, r.pressure), 0);
             data.designValues.finalPressureUsed = maxPressure; 
 
@@ -221,27 +219,21 @@
 
             // --- 1. Elongation Modifiers ---
 
-            // Modified elongation for length of strand
             R.modElongLen = (DV.elongationJackDesign / DV.strandLengthDesign) * AV.strandLengthActual;
             R.modElongLen = parseFloat(R.modElongLen.toFixed(3)); 
 
-            // Modified elongation within jack (Girder movement modification)
             R.modElongJack = DV.elongationGirderDesign + ((AV.gripLengthActual - DV.gripLengthDesign) / 1000) * 7;
             R.modElongJack = parseFloat(R.modElongJack.toFixed(3)); 
 
-            // Modified total elongation
             R.modElongTotal = R.modElongLen + R.modElongJack;
             R.modElongTotal = parseFloat(R.modElongTotal.toFixed(3)); 
 
-            // Modified elongation for cross sectional area
             R.modElongArea = R.modElongTotal * (DV.strandAreaDesign / AV.strandAreaActual);
             R.modElongArea = parseFloat(R.modElongArea.toFixed(3)); 
 
-            // Modified elongation for modulus of elasticity 
             R.designElongFinal = R.modElongArea * (DV.modulusEDesign / AV.modulusEActual);
             R.designElongFinal = parseFloat(R.designElongFinal.toFixed(3)); 
 
-            // Elongation Limits (± 5%)
             R.elongMin = R.designElongFinal * 0.95;
             R.elongMax = R.designElongFinal * 1.05;
             R.elongMin = parseFloat(R.elongMin.toFixed(3)); 
@@ -256,19 +248,16 @@
 
             // --- 3. Pressure Limits (4 separate limits as requested) ---
             
-            // Limits derived from P_Min
             R.pressureMinLowerLimit = R.pressureMin * 0.95;
             R.pressureMinUpperLimit = R.pressureMin * 1.05;
             R.pressureMinLowerLimit = parseFloat(R.pressureMinLowerLimit.toFixed(3)); 
             R.pressureMinUpperLimit = parseFloat(R.pressureMinUpperLimit.toFixed(3)); 
 
-            // Limits derived from P_Max
             R.pressureMaxLowerLimit = R.pressureMax * 0.95;
             R.pressureMaxUpperLimit = R.pressureMax * 1.05;
             R.pressureMaxLowerLimit = parseFloat(R.pressureMaxLowerLimit.toFixed(3)); 
             R.pressureMaxUpperLimit = parseFloat(R.pressureMaxUpperLimit.toFixed(3)); 
             
-            // Locking Pressure
             R.lockingPressure = DV.finalPressureUsed * 0.75;
             R.lockingPressure = parseFloat(R.lockingPressure.toFixed(3)); 
 
@@ -292,7 +281,7 @@
                 let ram50_2 = findRamReading(BASE_PRESSURE, 'ramEnd2');
 
                 // --- End 1 Calculation ---
-                if (reading.pressure < START_PRESSURE) { // START_PRESSURE = 250
+                if (reading.pressure < START_PRESSURE) { 
                     diffEnd1 = 0;
                     cumEnd1 = 0;
                 } else if (reading.pressure === START_PRESSURE) {
@@ -305,8 +294,6 @@
                         diffEnd1 = reading.ramEnd1 - findRamReading(prevReading.pressure, 'ramEnd1');
                         cumEnd1 = prevCumEnd1 + diffEnd1;
                     } else {
-                        // This branch handles cases where P > 250 but P=250 reading was missed.
-                        // For safety, it will carry over the previous cumulative value.
                         cumEnd1 = prevCumEnd1; 
                     }
                 }
@@ -329,11 +316,9 @@
                     }
                 }
 
-                // Update previous cumulative for next iteration
                 prevCumEnd1 = cumEnd1;
                 prevCumEnd2 = cumEnd2;
 
-                // Only average if pressure is at or above START_PRESSURE
                 let avgCum = 0;
                 if (reading.pressure >= START_PRESSURE) {
                     avgCum = (cumEnd1 + cumEnd2) / 2;
@@ -354,11 +339,9 @@
             // --- 5. Calculate Final Elongation and Status ---
             const finalProcessed = R.chartProcessed.find(r => r.pressure === DV.finalPressureUsed);
             if (finalProcessed) {
-                // Elongation AT MAX PRESSURE
                 R.finalElongation = (finalProcessed.cumEnd1 + finalProcessed.cumEnd2) / 2;
                 R.finalElongation = parseFloat(R.finalElongation.toFixed(3));
                 
-                // Elongation Status Check (AT MAX PRESSURE)
                 R.elongationStatus = (R.finalElongation >= R.elongMin && R.finalElongation <= R.elongMax) ? 'PASS: Within Tolerance' : 'FAIL: Outside Tolerance';
                 
                 // --- 6. Calculate Release Reading (Set/Loss) ---
@@ -370,25 +353,20 @@
                 const cumMax1 = finalProcessed.cumEnd1;
                 const cumMax2 = finalProcessed.cumEnd2;
 
-                // Difference (Set/Loss) is Actual Release Reading - Reading at Max Pressure
                 rel.diffEnd1 = RR.ramEnd1 - ramMax1;
                 rel.diffEnd2 = RR.ramEnd2 - ramMax2;
 
-                // Actual Set/Loss (Physical slip amount in mm) is the magnitude of the difference: |RamMax - RamRelease|
                 const actualSetLossEnd1 = Math.abs(RR.ramEnd1 - ramMax1);
                 const actualSetLossEnd2 = Math.abs(RR.ramEnd2 - ramMax2);
                 const actualSetLossAvg = (actualSetLossEnd1 + actualSetLossEnd2) / 2;
 
-                // Calculate cumulative after release (Final Elongation Including Set/Loss)
                 rel.cumEnd1 = cumMax1 + rel.diffEnd1;
                 rel.cumEnd2 = cumMax2 + rel.diffEnd2;
 
-                rel.avgCum = (rel.cumEnd1 + rel.cumEnd2) / 2; // This is the FINAL Elongation after draw-in
+                rel.avgCum = (rel.cumEnd1 + rel.cumEnd2) / 2; 
 
-                // Check A: Set/Loss Check (Limit is 8mm)
                 R.setLossStatus = (actualSetLossAvg <= SET_LOSS_LIMIT) ? `PASS: Set/Loss ${actualSetLossAvg.toFixed(3)} mm ≤ ${SET_LOSS_LIMIT} mm` : `FAIL: Set/Loss ${actualSetLossAvg.toFixed(3)} mm > ${SET_LOSS_LIMIT} mm`;
                 
-                // Check B: FINAL ELONGATION CHECK (Check the elongation *after* set/loss against tolerance)
                 const finalElongationWithSetLoss = rel.avgCum;
                 R.finalElongationAfterSetLoss = finalElongationWithSetLoss;
                 
@@ -397,14 +375,13 @@
                     : `FAIL: ${finalElongationWithSetLoss.toFixed(3)} mm is outside ±5% tolerance`;
 
 
-                // Format and assign to results
                 R.release = {
                     diffEnd1: parseFloat(rel.diffEnd1.toFixed(3)),
                     cumEnd1: parseFloat(rel.cumEnd1.toFixed(3)),
                     diffEnd2: parseFloat(rel.diffEnd2.toFixed(3)),
                     cumEnd2: parseFloat(rel.cumEnd2.toFixed(3)),
-                    avgCum: parseFloat(rel.avgCum.toFixed(3)), // Final Elongation (Including Set/Loss)
-                    setLoss: parseFloat(actualSetLossAvg.toFixed(3)), // Actual Set/Loss (mm)
+                    avgCum: parseFloat(rel.avgCum.toFixed(3)), 
+                    setLoss: parseFloat(actualSetLossAvg.toFixed(3)), 
                 }
 
             } else {
@@ -412,7 +389,6 @@
                 R.elongationStatus = 'INCOMPLETE: No Final Pressure Reading';
                 R.setLossStatus = 'INCOMPLETE: No Final Pressure Reading';
                 R.finalElongationAfterSetLossStatus = 'INCOMPLETE';
-                // Initialize release data structure to prevent null errors in render
                 R.release = { diffEnd1: 0, cumEnd1: 0, diffEnd2: 0, cumEnd2: 0, avgCum: 0, setLoss: 0 };
             }
 
@@ -422,30 +398,47 @@
 
         // --- UI Update & Data Binding ---
 
-        const calculateAge = (stressingDateStr, castingDateStr) => {
-             const dateStressing = new Date(stressingDateStr);
-             const dateCasting = new Date(castingDateStr);
+        // NEW: Function to set the data entry fields for the next expected reading
+        const initNewReadingFields = (readings) => {
+            const pressureInput = document.getElementById('newPressure');
+            const ram1Input = document.getElementById('newRamEnd1');
+            const ram2Input = document.getElementById('newRamEnd2');
+            const addButton = document.getElementById('addUpdateButton');
 
-            if (!isNaN(dateStressing) && !isNaN(dateCasting) && dateStressing.getTime() >= dateCasting.getTime()) {
-                const diffTime = Math.abs(dateStressing.getTime() - dateCasting.getTime());
-                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                return diffDays;
-            } 
-            return 0;
-        }
+            let nextPressure = 10; 
+            
+            // Find max pressure
+            const maxPressure = readings.reduce((max, r) => Math.max(max, r.pressure), 0);
+
+            if (maxPressure === 0) {
+                nextPressure = 10;
+            } else if (maxPressure === 10) {
+                nextPressure = 50;
+            } else if (maxPressure >= 50) {
+                nextPressure = maxPressure + 50;
+            }
+            
+            // Reset edit mode
+            editingRowIndex = -1;
+            pressureInput.value = nextPressure;
+            ram1Input.value = '';
+            ram2Input.value = '';
+            addButton.textContent = 'Add New Reading';
+            addButton.classList.remove('bg-yellow-600');
+            addButton.classList.add('bg-blue-600');
+        };
 
         const renderUI = () => {
-            // Recalculate Age before main report calculation
             reportData.projectDetails.age = calculateAge(
                 reportData.projectDetails.date,
                 reportData.projectDetails.dateOfCasting
             );
 
-            // Recalculate all results
+            reportData.chartReadings.sort((a, b) => a.pressure - b.pressure);
             reportData.calculatedResults = calculateReport(reportData);
             const R = reportData.calculatedResults;
 
-            // 1. Render Project Details and Design Parameters
+            // 1. Render all detail input fields
             document.querySelectorAll('input, span[data-bind], div[data-value]').forEach(el => {
                 if (el.name || el.dataset.bind || el.dataset.value) {
                     const name = el.name || el.dataset.bind || el.dataset.value;
@@ -461,7 +454,7 @@
 
                     if (el.tagName === 'INPUT') {
                         if (el.type === 'number') {
-                            el.value = val !== null && val !== undefined && val !== 0 ? val : '';
+                            el.value = val !== null && val !== undefined && val !== 0 ? val : (val === 0 ? 0 : '');
                         } else if (el.type === 'date' || el.type === 'time' || el.type === 'text') {
                             el.value = val !== null && val !== undefined ? val : '';
                         }
@@ -469,7 +462,6 @@
                          el.textContent = val !== null && val !== undefined ? val : '0';
                     }
                     
-                    // Set data-value attribute on parent div for printing
                     if (el.closest('.input-group') && (el.tagName === 'INPUT' || el.tagName === 'SPAN')) {
                          const displayValue = (typeof val === 'number' && val !== 0) ? val.toFixed(3) : val;
                          el.closest('.input-group').setAttribute('data-value', displayValue || (val === 0 ? '0' : ''));
@@ -477,7 +469,7 @@
                 }
             });
 
-            // 2. Render Calculated Results (using existing logic)
+            // 2. Render Calculated Results (Summary Section)
             const resultsMap = {
                 'elongationTotalDesign': reportData.designValues.elongationTotalDesign, 
                 'modElongLen': R.modElongLen,
@@ -509,12 +501,7 @@
                 }
             }
             
-            // Mirror design elongation to summary section
             document.getElementById('designElongFinal_summary').textContent = R.designElongFinal !== undefined && R.designElongFinal !== 'N/A' ? R.designElongFinal.toFixed(3) : 'N/A';
-
-            // --- Status Updates ---
-
-            // Helper to set color
             const setStatusDisplay = (elementId, statusText) => {
                 const el = document.getElementById(elementId);
                 if (!el) return;
@@ -532,24 +519,18 @@
                 el.className = `text-lg md:text-xl font-extrabold ${textColorClass}`;
             };
 
-
-            // 1. Elongation Status (AT MAX PRESSURE)
             setStatusDisplay('elongationStatus', R.elongationStatus);
 
-            // 2. Set/Loss Average Elongation (AFTER SET/LOSS)
             const setLossEl = document.getElementById('finalElongationAfterSetLoss');
             if (setLossEl) {
                 const avgCum = R.release?.avgCum;
                 setLossEl.textContent = avgCum !== undefined ? avgCum.toFixed(3) : 'N/A';
             }
             
-            // 3. Check A: Set/Loss Status (8mm check)
             setStatusDisplay('setLossStatus', R.setLossStatus || 'INCOMPLETE');
-
-            // 4. Check B: Final Elongation After Set/Loss Tolerance Check
             setStatusDisplay('finalElongationAfterSetLossStatus', R.finalElongationAfterSetLossStatus || 'INCOMPLETE');
 
-            // 5. Render Chart and Release Rows
+            // 3. Render Chart Rows (MODIFIED)
             const chartBody = document.getElementById('chartBody');
             chartBody.innerHTML = ''; 
 
@@ -563,36 +544,39 @@
                 const cum1Display = isCalculated ? reading.cumEnd1.toFixed(3) : '0.000';
                 const diff2Display = isCalculated ? reading.diffEnd2.toFixed(3) : '0.000';
                 const cum2Display = isCalculated ? reading.cumEnd2.toFixed(3) : '0.000';
-                
-                // avgCumDisplay is now correctly calculated for P >= 250 and 0 for P < 250
                 const avgCumDisplay = isCalculated ? reading.avgCum.toFixed(3) : '0.000'; 
 
 
                 tr.innerHTML = `
-                    <td class="p-2 border border-gray-200">${index + 1}</td>
+                    <td class="p-2 border border-gray-200 text-center">${index + 1}</td>
                     
-                    <td class="p-2 border border-gray-200 text-center">
-                        <input type="number" step="1" data-row="${index}" data-key="pressure" value="${reading.pressure}" class="table-input print-hidden" onchange="window.handleChartInputChange(event)">
-                        <span class="hidden print:inline">${reading.pressure}</span>
-                    </td>
+                    <!-- Pressure (Display Only) -->
+                    <td class="p-2 border border-gray-200 text-center font-bold">${reading.pressure}</td>
 
-                    <td class="p-2 border border-gray-200 text-center">
-                        <input type="number" step="1" data-row="${index}" data-key="ramEnd1" value="${reading.ramEnd1}" class="table-input print-hidden" onchange="window.handleChartInputChange(event)">
-                        <span class="hidden print:inline">${reading.ramEnd1}</span>
-                    </td>
+                    <!-- End 1: Ram Reading (Display Only) -->
+                    <td class="p-2 border border-gray-200 text-center">${reading.ramEnd1}</td>
                     
+                    <!-- End 1: Diff (Calculated) -->
                     <td class="p-2 border border-gray-200 text-right">${diff1Display}</td>
+                    <!-- End 1: Cum (Calculated) -->
                     <td class="p-2 border border-gray-200 text-right font-semibold">${cum1Display}</td>
 
-                    <td class="p-2 border border-gray-200 text-center">
-                        <input type="number" step="1" data-row="${index}" data-key="ramEnd2" value="${reading.ramEnd2}" class="table-input print-hidden" onchange="window.handleChartInputChange(event)">
-                        <span class="hidden print:inline">${reading.ramEnd2}</span>
-                    </td>
+                    <!-- End 2: Ram Reading (Display Only) -->
+                    <td class="p-2 border border-gray-200 text-center">${reading.ramEnd2}</td>
 
+                    <!-- End 2: Diff (Calculated) -->
                     <td class="p-2 border border-gray-200 text-right">${diff2Display}</td>
+                    <!-- End 2: Cum (Calculated) -->
                     <td class="p-2 border border-gray-200 text-right font-semibold">${cum2Display}</td>
                     
+                    <!-- Avg. Elongation (Calculated) -->
                     <td class="p-2 border border-gray-200 text-right font-extrabold text-blue-800">${avgCumDisplay}</td>
+
+                    <!-- Action Buttons (NEW) -->
+                    <td class="p-2 border border-gray-200 action-buttons print-hidden w-24">
+                        <button onclick="window.editRow(${index})" class="text-blue-500 hover:text-blue-700 font-bold mr-1">Edit</button>
+                        <button onclick="window.deleteRow(${index})" class="text-red-500 hover:text-red-700 font-bold">Del</button>
+                    </td>
                 `;
                 chartBody.appendChild(tr);
             });
@@ -608,28 +592,41 @@
                 
                 <td class="p-2 border border-yellow-500 text-center text-red-700">FINAL (After Release)</td> 
                 
-                <td class="p-2 border border-yellow-500 text-center">
-                    <input type="number" step="1" name="releaseReading.ramEnd1" value="${reportData.releaseReading.ramEnd1}" class="table-input bg-yellow-50 print-hidden" onchange="window.handleInputChange(event)">
-                    <span class="hidden print:inline">${reportData.releaseReading.ramEnd1}</span>
+                <!-- End 1: Ram Reading (Input for Release) -->
+                <td class="p-2 border border-yellow-500 text-center print-hidden">
+                    <input type="number" step="1" name="releaseReading.ramEnd1" value="${reportData.releaseReading.ramEnd1}" class="input-field bg-yellow-50 text-base" onchange="window.handleInputChange(event)">
                 </td>
+                <td class="p-2 border border-yellow-500 text-center hidden print:inline">${reportData.releaseReading.ramEnd1}</td>
 
+
+                <!-- End 1: Diff (Calculated - Set/Loss) -->
                 <td class="p-2 border border-yellow-500 text-right">${releaseCalculated.diffEnd1?.toFixed(3) || 'N/A'}</td>
+                <!-- End 1: Cum (Calculated) -->
                 <td class="p-2 border border-yellow-500 text-right">${releaseCalculated.cumEnd1?.toFixed(3) || 'N/A'}</td>
 
-                <td class="p-2 border border-yellow-500 text-center">
-                    <input type="number" step="1" name="releaseReading.ramEnd2" value="${reportData.releaseReading.ramEnd2}" class="table-input bg-yellow-50 print-hidden" onchange="window.handleInputChange(event)">
-                    <span class="hidden print:inline">${reportData.releaseReading.ramEnd2}</span>
+                <!-- End 2: Ram Reading (Input for Release) -->
+                <td class="p-2 border border-yellow-500 text-center print-hidden">
+                    <input type="number" step="1" name="releaseReading.ramEnd2" value="${reportData.releaseReading.ramEnd2}" class="input-field bg-yellow-50 text-base" onchange="window.handleInputChange(event)">
                 </td>
+                 <td class="p-2 border border-yellow-500 text-center hidden print:inline">${reportData.releaseReading.ramEnd2}</td>
 
+
+                <!-- End 2: Diff (Calculated - Set/Loss) -->
                 <td class="p-2 border border-yellow-500 text-right">${releaseCalculated.diffEnd2?.toFixed(3) || 'N/A'}</td>
+                <!-- End 2: Cum (Calculated) -->
                 <td class="p-2 border border-yellow-500 text-right">${releaseCalculated.cumEnd2?.toFixed(3) || 'N/A'}</td>
                 
-                <td class="p-2 border border-yellow-500 text-right text-red-700">${releaseCalculated.avgCum?.toFixed(3) || 'N/A'}</td>
+                <!-- Avg. Elongation (Calculated) -->
+                <td class="p-2 border border-yellow-500 text-right text-red-700" colspan="2">${releaseCalculated.avgCum?.toFixed(3) || 'N/A'}</td>
             `;
             chartBody.appendChild(finalRow);
+            
+            // Initialize or reset the data entry panel fields
+            initNewReadingFields(reportData.chartReadings);
         };
 
-        // Global functions for event handlers
+        // --- NEW DATA ENTRY FUNCTIONS ---
+
         window.handleInputChange = (event) => {
             const input = event.target;
             const value = input.type === 'number' && input.value !== '' ? parseFloat(input.value) : input.value;
@@ -640,50 +637,73 @@
                 if (reportData[section] && reportData[section].hasOwnProperty(key)) {
                     reportData[section][key] = value;
                     saveData();
+                } else if (section === 'releaseReading' && reportData.releaseReading.hasOwnProperty(key)) {
+                    reportData.releaseReading[key] = value;
+                    saveData();
                 }
             }
         };
 
-        window.handleChartInputChange = (event) => {
-            const input = event.target;
-            const row = parseInt(input.getAttribute('data-row'));
-            const key = input.getAttribute('data-key');
-            
-            const value = input.value !== '' ? parseFloat(input.value) : 0; 
+        window.handleNewReadingEntry = () => {
+            const pressureInput = document.getElementById('newPressure');
+            const ram1Input = document.getElementById('newRamEnd1');
+            const ram2Input = document.getElementById('newRamEnd2');
 
-            if (!isNaN(value)) {
-                if(reportData.chartReadings[row]) {
-                     reportData.chartReadings[row][key] = value;
-                     
-                     reportData.chartReadings.sort((a, b) => a.pressure - b.pressure);
+            const pressure = parseFloat(pressureInput.value);
+            const ramEnd1 = parseFloat(ram1Input.value || 0);
+            const ramEnd2 = parseFloat(ram2Input.value || 0);
 
-                     saveData();
+            if (isNaN(pressure) || pressure <= 0) {
+                alert('Please enter a valid pressure value.'); // Using custom modal in final app
+                return;
+            }
+
+            if (editingRowIndex !== -1) {
+                // UPDATE existing row
+                reportData.chartReadings[editingRowIndex] = { pressure, ramEnd1, ramEnd2 };
+                editingRowIndex = -1; // Reset edit mode
+            } else {
+                // ADD new row
+                // Check if pressure already exists
+                const existingIndex = reportData.chartReadings.findIndex(r => r.pressure === pressure);
+                if (existingIndex !== -1) {
+                    // Update existing if pressure is the same, or prompt to use Edit button
+                     alert(`Reading for Pressure ${pressure} kg/cm² already exists. Please use the 'Edit' button on the table or change the pressure.`);
+                     return;
                 }
+                reportData.chartReadings.push({ pressure, ramEnd1, ramEnd2 });
             }
-        };
 
-        window.addRow = () => {
-            const maxPressure = reportData.chartReadings.reduce((max, r) => Math.max(max, r.pressure), 0);
-            
-            let newPressure = maxPressure + 50;
-            if (maxPressure === 350) {
-                 newPressure = 360;
-            } else if (maxPressure === 0) {
-                 newPressure = 50; 
-            }
-            
-            const newRow = { pressure: newPressure, ramEnd1: 0, ramEnd2: 0 };
-            reportData.chartReadings.push(newRow);
-            
-            reportData.chartReadings.sort((a, b) => a.pressure - b.pressure);
+            // Save data, which will trigger renderUI and reset fields
             saveData();
         };
 
-        window.removeLastRow = () => {
-            if (reportData.chartReadings.length > 1) {
-                reportData.chartReadings.pop(); 
-                saveData();
-            }
+        window.editRow = (index) => {
+            const reading = reportData.chartReadings[index];
+            if (!reading) return;
+
+            // Set global edit index
+            editingRowIndex = index;
+
+            // Populate inputs
+            document.getElementById('newPressure').value = reading.pressure;
+            document.getElementById('newRamEnd1').value = reading.ramEnd1;
+            document.getElementById('newRamEnd2').value = reading.ramEnd2;
+            
+            // Update button text and style
+            const addButton = document.getElementById('addUpdateButton');
+            addButton.textContent = `Update Reading (${reading.pressure} kg/cm²)`;
+            addButton.classList.remove('bg-blue-600');
+            addButton.classList.add('bg-yellow-600');
+        };
+
+        window.deleteRow = (index) => {
+             // Replacing confirm() with a visual indication in a real app
+             if (!confirm('Are you sure you want to delete this reading?')) {
+                 return;
+             }
+             reportData.chartReadings.splice(index, 1);
+             saveData();
         };
         
         window.generatePdf = () => {
@@ -699,6 +719,7 @@
         const saveData = () => {
             if (!db || !userId) {
                 console.error("Firestore not initialized or user not authenticated.");
+                renderUI(); // Render even if save fails in local dev
                 return;
             }
 
@@ -791,6 +812,7 @@
             <p id="userIdDisplay" class="text-sm text-gray-500 mt-1">User ID: Loading...</p>
         </header>
         
+        <!-- PDF Generation Button -->
         <div class="print-hidden mb-6 flex justify-center">
             <button onclick="window.generatePdf()" class="flex items-center space-x-2 px-6 py-3 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 transition duration-150 shadow-lg">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-6 h-6">
@@ -801,6 +823,7 @@
             </button>
         </div>
         
+        <!-- 1. Project Details Section -->
         <section class="mb-8 border border-gray-200 rounded-lg p-4 shadow-sm">
             <h2 class="text-lg font-semibold mb-4 text-emerald-700 border-b pb-2">1. Project & Cable Details</h2>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2 text-sm">
@@ -818,6 +841,7 @@
             </div>
         </section>
 
+        <!-- 2. Equipment & Design Parameters (Sections 2-5 remain as they were) -->
         <section class="mb-8 border border-gray-200 rounded-lg p-4 shadow-sm">
             <h2 class="text-lg font-semibold mb-4 text-emerald-700 border-b pb-2">2. Equipment Parameters</h2>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2 text-sm">
@@ -886,6 +910,7 @@
             </div>
         </section>
 
+        <!-- 6. Final Elongation Check Summary -->
         <section class="mb-8 p-4 bg-yellow-50 rounded-lg border-2 border-yellow-300 shadow-sm">
             <h2 class="text-lg font-bold text-yellow-800 mb-3">6. Final Elongation Limits (±5% of Final Design)</h2>
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm font-semibold">
@@ -904,52 +929,67 @@
             </div>
         </section>
 
+        <!-- 7. Mobile-Friendly Data Entry Panel (NEW SECTION) -->
+        <section class="mb-8 p-4 bg-emerald-50 rounded-lg border-2 border-emerald-300 print-hidden">
+            <h2 class="text-lg font-semibold mb-4 text-emerald-700 border-b pb-2">7. Data Entry (Chart Readings)</h2>
+            <div class="grid grid-cols-3 gap-3 mb-4">
+                <div>
+                    <label for="newPressure" class="block text-sm font-medium text-gray-700 mb-1">Pressure ($kg/cm^2$)</label>
+                    <input type="number" id="newPressure" placeholder="10" step="10" class="mobile-input-field" />
+                </div>
+                <div>
+                    <label for="newRamEnd1" class="block text-sm font-medium text-gray-700 mb-1">Ram End 1 (mm)</label>
+                    <input type="number" id="newRamEnd1" placeholder="End 1 Reading" step="1" class="mobile-input-field" />
+                </div>
+                <div>
+                    <label for="newRamEnd2" class="block text-sm font-medium text-gray-700 mb-1">Ram End 2 (mm)</label>
+                    <input type="number" id="newRamEnd2" placeholder="End 2 Reading" step="1" class="mobile-input-field" />
+                </div>
+            </div>
+            <button id="addUpdateButton" onclick="window.handleNewReadingEntry()" class="w-full px-4 py-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition duration-150 shadow-md">
+                Add New Reading
+            </button>
+        </section>
 
+
+        <!-- 8. Stressing Chart Section (Now read-only data, with action buttons) -->
         <section class="mb-8 border border-gray-200 rounded-lg p-4 shadow-sm">
-            <h2 class="text-lg font-semibold mb-4 text-emerald-700 border-b pb-2">7. Stressing Chart Readings</h2>
+            <h2 class="text-lg font-semibold mb-4 text-emerald-700 border-b pb-2">8. Stressing Chart Readings</h2>
 
             <div class="overflow-x-auto mb-4">
                 <table class="min-w-full border-collapse border border-gray-300 text-sm">
                     <thead>
                         <tr class="header-bg">
                             <th class="p-2 border-r border-gray-700" rowspan="2">SI. No</th>
-                            
-                            <th class="p-2 border-r border-gray-700" rowspan="2">Pressure (kg/cm²)</th> 
-                            
+                            <th class="p-2 border-r border-gray-700" rowspan="2">Pressure ($kg/cm^2$)</th> 
                             <th class="p-2 border-r border-gray-700" colspan="3">End 1 Elongation (mm)</th>
-                            
                             <th class="p-2 border-r border-gray-700" colspan="3">End 2 Elongation (mm)</th> 
-                            
                             <th class="p-2" rowspan="2">Avg. Elongation (mm)</th> 
+                            <th class="p-2 action-buttons print-hidden" rowspan="2">Actions</th> 
                         </tr>
                         <tr class="header-bg text-xs">
                             <th class="p-2 border-r border-gray-700">Ram Reading (Input)</th>
                             <th class="p-2 border-r border-gray-700">Diff</th>
                             <th class="p-2 border-r border-gray-700">Cum</th>
-                            
                             <th class="p-2 border-r border-gray-700">Ram Reading (Input)</th>
                             <th class="p-2 border-r border-gray-700">Diff</th>
                             <th class="p-2 border-r border-gray-700">Cum</th>
-                            
-                            </tr>
+                        </tr>
                     </thead>
                     <tbody id="chartBody">
-                        </tbody>
+                        <!-- Chart rows and the final release row will be injected here by JavaScript -->
+                    </tbody>
                 </table>
-            </div>
-            
-            <div class="flex justify-end space-x-2 print-hidden">
-                <button onclick="window.removeLastRow()" class="px-4 py-2 bg-red-500 text-white font-semibold rounded-lg hover:bg-red-600 transition duration-150 shadow-md">Remove Last Row</button>
-                <button onclick="window.addRow()" class="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition duration-150 shadow-md">Add Pressure Reading</button>
             </div>
         </section>
 
+        <!-- 9. Final Results & Status -->
         <section class="p-4 bg-emerald-50 rounded-lg border-2 border-emerald-300">
-            <h2 class="text-lg font-bold text-emerald-800 mb-3">8. Final Checks & Stressing Status</h2>
+            <h2 class="text-lg font-bold text-emerald-800 mb-3">9. Final Checks & Stressing Status</h2>
 
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2 text-sm mb-4 border-b pb-4">
                 <div class="input-group">
-                    <span class="input-label font-extrabold text-base text-emerald-600">Final Stressing Pressure Used (kg/cm²)</span>
+                    <span class="input-label font-extrabold text-base text-emerald-600">Final Stressing Pressure Used ($kg/cm^2$)</span>
                     <span class="calculated-value font-extrabold text-base text-emerald-600" id="finalPressureUsedDisplay">0</span>
                 </div>
                 <div class="input-group">
