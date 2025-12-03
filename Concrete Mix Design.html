@@ -407,11 +407,11 @@
         };
 
         const IS_456_DURABILITY_LIMITS = {
-            'Mild': { min_cement: 300, max_wc: 0.50, min_grade: 20 },
-            'Moderate': { min_cement: 310, max_wc: 0.45, min_grade: 25 },
+            'Mild': { min_cement: 300, max_wc: 0.55, min_grade: 20 },
+            'Moderate': { min_cement: 300, max_wc: 0.50, min_grade: 25 },
             'Severe': { min_cement: 320, max_wc: 0.45, min_grade: 30 },
-            'VerySevere': { min_cement: 330, max_wc: 0.45, min_grade: 35 },
-            'Extreme': { min_cement: 340, max_wc: 0.40, min_grade: 40 }
+            'VerySevere': { min_cement: 340, max_wc: 0.45, min_grade: 35 },
+            'Extreme': { min_cement: 360, max_wc: 0.40, min_grade: 40 }
         };
 
         const round = (num, dp = 2) => Math.round(num * (10 ** dp)) / (10 ** dp);
