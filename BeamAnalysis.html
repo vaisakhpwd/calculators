@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RC Beam Capacity Analysis Tool (IS 456:2000)</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Configure Tailwind for Inter font -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Custom scrollbar for a cleaner look */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background-color: #9ca3af;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 font-sans p-4 sm:p-8">
+
+    <div class="max-w-4xl mx-auto bg-white shadow-xl rounded-xl overflow-hidden">
+        <header class="bg-indigo-600 p-6">
+            <h1 class="text-3xl font-extrabold text-white">RC Beam Capacity Check</h1>
+            <p class="text-indigo-200 text-sm mt-1">Based on Limit State Method (IS 456:2000). All dimensions in mm and forces in kNm/kN.</p>
+        </header>
+
+        <main class="p-6 grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- Input Form -->
+            <div class="lg:col-span-2 space-y-6">
+                <div id="material-props" class="p-4 border border-indigo-200 rounded-lg bg-indigo-50 shadow-sm">
+                    <h2 class="text-xl font-semibold text-indigo-700 mb-3 border-b pb-2">1. Material Properties</h2>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label for="fck" class="block text-sm font-medium text-gray-700">Concrete Grade ($f_{ck}$)</label>
+                            <select id="fck" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md shadow-sm">
+                                <option value="20">M20 ($f_{ck}=20$ N/mm²)</option>
+                                <option value="25" selected>M25 ($f_{ck}=25$ N/mm²)</option>
+                                <option value="30">M30 ($f_{ck}=30$ N/mm²)</option>
+                                <option value="35">M35 ($f_{ck}=35$ N/mm²)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="fy" class="block text-sm font-medium text-gray-700">Steel Grade ($f_{y}$)</label>
+                            <select id="fy" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md shadow-sm">
+                                <option value="415" selected>Fe 415</option>
+                                <option value="500">Fe 500</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="section-dims" class="p-4 border border-gray-200 rounded-lg shadow-sm">
+                    <h2 class="text-xl font-semibold text-gray-700 mb-3 border-b pb-2">2. Section Geometry (mm)</h2>
+                    <div class="grid grid-cols-3 gap-4">
+                        <div>
+                            <label for="breadth" class="block text-sm font-medium text-gray-700">Breadth ($b$)</label>
+                            <input type="number" id="breadth" value="300" placeholder="e.g., 300" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                        </div>
+                        <div>
+                            <label for="depth" class="block text-sm font-medium text-gray-700">Overall Depth ($D$)</label>
+                            <input type="number" id="depth" value="500" placeholder="e.g., 500" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                        </div>
+                        <div>
+                            <label for="clearCover" class="block text-sm font-medium text-gray-700">Clear Cover ($c$)</label>
+                            <input type="number" id="clearCover" value="40" placeholder="e.g., 40" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                        </div>
+                    </div>
+                </div>
+
+                <div id="flexural-reinf" class="p-4 border border-gray-200 rounded-lg shadow-sm">
+                    <h2 class="text-xl font-semibold text-gray-700 mb-3 border-b pb-2">3. Longitudinal Reinforcement</h2>
+                    <div class="grid grid-cols-2 gap-6">
+                        <!-- Tension Steel -->
+                        <fieldset class="border border-green-400 p-3 rounded-md">
+                            <legend class="text-md font-medium text-green-700 px-1">Tension Steel ($A_{st}$)</legend>
+                            <div class="grid grid-cols-2 gap-4 mt-2">
+                                <div>
+                                    <label for="nt" class="block text-sm font-medium text-gray-700">No. of Bars</label>
+                                    <input type="number" id="nt" value="3" placeholder="e.g., 3" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm">
+                                </div>
+                                <div>
+                                    <label for="phit" class="block text-sm font-medium text-gray-700">Bar Diameter ($\phi_{t}$)</label>
+                                    <select id="phit" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm rounded-md shadow-sm">
+                                        <option value="8">8 mm</option>
+                                        <option value="10">10 mm</option>
+                                        <option value="12">12 mm</option>
+                                        <option value="16" selected>16 mm</option>
+                                        <option value="20">20 mm</option>
+                                        <option value="25">25 mm</option>
+                                        <option value="32">32 mm</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </fieldset>
+
+                        <!-- Compression Steel -->
+                        <fieldset class="border border-red-400 p-3 rounded-md">
+                            <legend class="text-md font-medium text-red-700 px-1">Compression Steel ($A_{sc}$)</legend>
+                            <div class="grid grid-cols-2 gap-4 mt-2">
+                                <div>
+                                    <label for="nc" class="block text-sm font-medium text-gray-700">No. of Bars</label>
+                                    <input type="number" id="nc" value="2" placeholder="e.g., 2" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500 sm:text-sm">
+                                </div>
+                                <div>
+                                    <label for="phic" class="block text-sm font-medium text-gray-700">Bar Diameter ($\phi_{c}$)</label>
+                                    <select id="phic" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-red-500 focus:border-red-500 sm:text-sm rounded-md shadow-sm">
+                                        <option value="8">8 mm</option>
+                                        <option value="10" selected>10 mm</option>
+                                        <option value="12">12 mm</option>
+                                        <option value="16">16 mm</option>
+                                        <option value="20">20 mm</option>
+                                        <option value="25">25 mm</option>
+                                        <option value="32">32 mm</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </fieldset>
+                    </div>
+                </div>
+
+                <div id="shear-reinf" class="p-4 border border-gray-200 rounded-lg shadow-sm">
+                    <h2 class="text-xl font-semibold text-gray-700 mb-3 border-b pb-2">4. Shear Reinforcement (Stirrups)</h2>
+                    <div class="grid grid-cols-3 gap-4">
+                        <div>
+                            <label for="phiv" class="block text-sm font-medium text-gray-700">Bar Diameter ($\phi_{v}$)</label>
+                            <select id="phiv" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md shadow-sm">
+                                <option value="6">6 mm</option>
+                                <option value="8" selected>8 mm</option>
+                                <option value="10">10 mm</option>
+                                <option value="12">12 mm</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="nlegs" class="block text-sm font-medium text-gray-700">No. of Legs</label>
+                            <input type="number" id="nlegs" value="2" placeholder="e.g., 2" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                        </div>
+                        <div>
+                            <label for="sv" class="block text-sm font-medium text-gray-700">Spacing ($s_{v}$) (mm)</label>
+                            <input type="number" id="sv" value="150" placeholder="e.g., 150" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                        </div>
+                    </div>
+                </div>
+
+                <div id="applied-forces" class="p-4 border border-gray-200 rounded-lg shadow-sm">
+                    <h2 class="text-xl font-semibold text-gray-700 mb-3 border-b pb-2">5. Applied Ultimate Forces</h2>
+                    <div class="grid grid-cols-3 gap-4">
+                        <div>
+                            <label for="mu" class="block text-sm font-medium text-gray-700">Moment ($M_{u}$) (kNm)</label>
+                            <input type="number" id="mu" value="150" placeholder="e.g., 150" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                        </div>
+                        <div>
+                            <label for="vu" class="block text-sm font-medium text-gray-700">Shear ($V_{u}$) (kN)</label>
+                            <input type="number" id="vu" value="75" placeholder="e.g., 75" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                        </div>
+                        <div>
+                            <label for="tu" class="block text-sm font-medium text-gray-700">Torsion ($T_{u}$) (kNm)</label>
+                            <input type="number" id="tu" value="10" placeholder="e.g., 10" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                        </div>
+                    </div>
+                </div>
+
+                <button onclick="calculateCapacity()" class="w-full py-3 px-4 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg shadow-md transition duration-150 ease-in-out">
+                    Calculate Section Capacity & Verdict
+                </button>
+            </div>
+
+            <!-- Results Panel -->
+            <div id="results-panel" class="lg:col-span-1 bg-gray-100 p-4 rounded-lg shadow-inner overflow-y-auto max-h-[80vh]">
+                <h2 class="text-2xl font-bold text-gray-800 mb-4 border-b pb-2">Analysis Results</h2>
+                <div id="verdict-container" class="mb-4 p-3 rounded-lg text-center font-extrabold text-lg transition duration-500">
+                    Enter inputs and click 'Calculate'.
+                </div>
+                <div id="calculation-details" class="text-sm space-y-3">
+                    <!-- Calculation details will appear here -->
+                </div>
+                <div id="error-message" class="hidden mt-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded-md"></div>
+            </div>
+        </main>
+        <footer class="p-4 text-center text-xs text-gray-500 border-t mt-4">
+            Analysis based on IS 456:2000 provisions for doubly reinforced rectangular sections.
+        </footer>
+    </div>
+
+    <script>
+        // IS 456:2000 Data Tables and Constants
+        const PI = Math.PI;
+
+        // Table 19: Design Shear Strength of Concrete, τc (N/mm²)
+        // pt: [0.15, 0.25, 0.50, 0.75, 1.00, 1.25, 1.50, 1.75, 2.00, 2.25, 2.50, 2.75, 3.00]
+        const TAU_C_TABLE = {
+            '20': [0.28, 0.36, 0.48, 0.56, 0.62, 0.67, 0.72, 0.75, 0.79, 0.81, 0.82, 0.82, 0.82],
+            '25': [0.29, 0.38, 0.51, 0.60, 0.67, 0.73, 0.78, 0.82, 0.85, 0.88, 0.90, 0.92, 0.93],
+            '30': [0.30, 0.39, 0.53, 0.63, 0.71, 0.78, 0.84, 0.88, 0.92, 0.95, 0.98, 1.01, 1.03],
+            '35': [0.31, 0.40, 0.55, 0.66, 0.74, 0.82, 0.88, 0.93, 0.97, 1.01, 1.04, 1.07, 1.09] // Approx for M35+
+        };
+
+        const PT_VALUES = [0.15, 0.25, 0.50, 0.75, 1.00, 1.25, 1.50, 1.75, 2.00, 2.25, 2.50, 2.75, 3.00];
+
+        // Table 20: Maximum Shear Stress, τc,max (N/mm²)
+        const TAU_C_MAX_TABLE = {
+            '20': 2.8,
+            '25': 3.1,
+            '30': 3.5,
+            '35': 3.7
+        };
+
+        // Annex G / Table F: Stress in Compression Reinforcement, fsc (N/mm²)
+        // Note: For simplicity and conservative design, we will use a functional approximation
+        // where fsc = 0.87*fy if the strain in compression steel is > yield strain.
+        // A full table lookup is too complex for this single-file tool, so we will use the standard strain calculation.
+
+        function interpolate(x, x0, y0, x1, y1) {
+            if (x1 === x0) return y0; // Avoid division by zero
+            return y0 + (x - x0) * (y1 - y0) / (x1 - x0);
+        }
+
+        function getConcreteShearStrength(fck, pt) {
+            if (pt < 0.15) pt = 0.15;
+            if (pt > 3.0) pt = 3.0;
+
+            const tau_values = TAU_C_TABLE[fck];
+            if (!tau_values) return 0; // Should not happen
+
+            // Find the two surrounding pt values
+            let i = 0;
+            while (i < PT_VALUES.length && PT_VALUES[i] < pt) {
+                i++;
+            }
+
+            if (i === 0) return tau_values[0]; // Less than 0.15
+            if (i === PT_VALUES.length) return tau_values[PT_VALUES.length - 1]; // Greater than 3.0
+
+            const pt0 = PT_VALUES[i - 1];
+            const tau0 = tau_values[i - 1];
+            const pt1 = PT_VALUES[i];
+            const tau1 = tau_values[i];
+
+            return interpolate(pt, pt0, tau0, pt1, tau1);
+        }
+
+        function getXumax(fy) {
+            // IS 456:2000 Cl 38.1
+            switch (fy) {
+                case 250: return 0.53; // Not in dropdown but included for completeness
+                case 415: return 0.48;
+                case 500: return 0.46;
+                default: return 0.48; // Default for safety
+            }
+        }
+
+        function calculateCapacity() {
+            // Clear previous results and errors
+            document.getElementById('calculation-details').innerHTML = '';
+            document.getElementById('error-message').classList.add('hidden');
+            const verdictContainer = document.getElementById('verdict-container');
+            verdictContainer.className = 'mb-4 p-3 rounded-lg text-center font-extrabold text-lg transition duration-500';
+            verdictContainer.textContent = 'Calculating...';
+
+            try {
+                // 1. Get Input Values
+                const fck = parseFloat(document.getElementById('fck').value);
+                const fy = parseFloat(document.getElementById('fy').value);
+                const b = parseFloat(document.getElementById('breadth').value);
+                const D = parseFloat(document.getElementById('depth').value);
+                const clearCover = parseFloat(document.getElementById('clearCover').value);
+
+                const nt = parseInt(document.getElementById('nt').value);
+                const phit = parseFloat(document.getElementById('phit').value);
+                const nc = parseInt(document.getElementById('nc').value);
+                const phic = parseFloat(document.getElementById('phic').value);
+
+                const phiv = parseFloat(document.getElementById('phiv').value);
+                const nlegs = parseInt(document.getElementById('nlegs').value);
+                const sv = parseFloat(document.getElementById('sv').value);
+
+                const Mu = parseFloat(document.getElementById('mu').value) * 1e6; // kNm to N-mm
+                const Vu = parseFloat(document.getElementById('vu').value) * 1e3; // kN to N
+                const Tu = parseFloat(document.getElementById('tu').value) * 1e6; // kNm to N-mm
+
+                // Simple Input Validation
+                if (b <= 0 || D <= 0 || clearCover <= 0 || nt < 0 || nc < 0 || sv <= 0) {
+                    throw new Error("All dimensions and spacing must be positive numbers. Number of bars cannot be negative.");
+                }
+                if (clearCover > D / 3) {
+                    throw new Error("Clear cover is too large for the beam depth.");
+                }
+
+                // 2. Initial Geometric Calculations
+                const Ast = nt * (PI * phit * phit / 4); // Area of tension steel (mm²)
+                const Asc = nc * (PI * phic * phic / 4); // Area of compression steel (mm²)
+
+                // Approximate effective depth (d) and cover to compression steel (d')
+                const d = D - clearCover - (phiv / 2) - (phit / 2); // d ≈ D - c - phi_v/2 - phi_t/2
+                const d_prime = clearCover + (phiv / 2) + (phic / 2); // d' ≈ c + phi_v/2 + phi_c/2
+
+                // Check for valid depths
+                if (d <= 0 || d_prime > d) {
+                     throw new Error("Effective depth calculation failed. Check cover, depth, and bar sizes.");
+                }
+
+                let details = `<h3 class="font-bold text-lg text-gray-800 border-b mt-4 pb-1">Calculated Properties</h3>`;
+                details += `<p>Effective Depth ($d$): ${d.toFixed(1)} mm</p>`;
+                details += `<p>Cover to Comp. Steel ($d'$): ${d_prime.toFixed(1)} mm</p>`;
+                details += `<p>Tension Steel ($A_{st}$): ${Ast.toFixed(2)} mm²</p>`;
+                details += `<p>Comp. Steel ($A_{sc}$): ${Asc.toFixed(2)} mm²</p>`;
+                details += `<p>Percentage of Steel ($p_{t}$): ${((Ast / (b * d)) * 100).toFixed(3)} %</p>`;
+
+                let safeFlexure = false;
+                let safeShear = false;
+
+                // --- FLEXURE CAPACITY ($M_{u,cap}$) ---
+                details += `<h3 class="font-bold text-lg text-gray-800 border-b mt-4 pb-1">Flexural Analysis (IS 456:2000, Cl. G)</h3>`;
+                const xu_max_ratio = getXumax(fy);
+                const xu_max = xu_max_ratio * d;
+                details += `<p>Maximum Neutral Axis Depth ($x_{u, \max}$): ${xu_max.toFixed(1)} mm (${xu_max_ratio}d)</p>`;
+
+                let fsc; // Stress in compression steel (N/mm²)
+
+                // Iterative/Trial approach for xu
+                const Est = 200000; // Modulus of elasticity of steel
+                const strain_y = 0.87 * fy / Est;
+
+                // The equation to solve for xu (approx.): C = T
+                // 0.36 fck b xu + (fsc - 0.446 fck) Asc = 0.87 fy Ast
+                // The issue is fsc depends on xu. We iterate to find xu.
+                let xu = d * 0.5; // Initial guess
+
+                for (let i = 0; i < 10; i++) { // 10 iterations should be enough
+                    // Calculate strain in compression steel based on current xu
+                    const strain_sc = 0.0035 * (xu - d_prime) / xu;
+                    const strain_sc_limit = strain_y; // Simplified yield check
+
+                    if (strain_sc > strain_sc_limit) {
+                        // Compression steel yields (or near yield)
+                        fsc = 0.87 * fy;
+                    } else {
+                        // Compression steel does not yield, stress = E_s * strain_sc
+                        fsc = Est * strain_sc;
+                        if (fsc < 0) fsc = 0; // Should not be negative
+                    }
+
+                    // Calculate new xu from force balance: xu = (0.87 fy Ast - (fsc - 0.446 fck) Asc) / (0.36 fck b)
+                    const numerator = (0.87 * fy * Ast) - (fsc - 0.446 * fck) * Asc;
+                    const denominator = 0.36 * fck * b;
+
+                    if (denominator === 0) {
+                        throw new Error("Section breadth or concrete strength is zero.");
+                    }
+
+                    const new_xu = numerator / denominator;
+                    if (Math.abs(new_xu - xu) < 0.1) break; // Convergence check
+                    xu = new_xu;
+                }
+
+                details += `<p>Calculated Neutral Axis Depth ($x_{u}$): ${xu.toFixed(1)} mm</p>`;
+                details += `<p>Stress in Comp. Steel ($f_{sc}$): ${fsc.toFixed(1)} N/mm²</p>`;
+
+                let Mu_cap;
+                let isOverReinforced = false;
+
+                if (xu > xu_max) {
+                    // Over-reinforced or limiting case: Use xu_max for moment calculation
+                    xu = xu_max;
+                    isOverReinforced = true;
+                    details += `<p class="text-red-600 font-semibold">Section is Over-Reinforced. Using $x_{u, \max}$ for $M_{u, \text{cap}}$.</p>`;
+                }
+
+                // Calculate Moment Capacity
+                // Mu_cap = Mu1 + Mu2 (from concrete and compression steel)
+                const Mu1 = 0.36 * fck * b * xu * (d - 0.416 * xu);
+                const Mu2 = (fsc - 0.446 * fck) * Asc * (d - d_prime);
+
+                Mu_cap = Mu1 + Mu2; // N-mm
+                const Mu_cap_kNm = Mu_cap / 1e6;
+
+                details += `<p class="font-bold text-lg text-green-700">Flexural Capacity ($M_{u, \text{cap}}$): ${Mu_cap_kNm.toFixed(2)} kNm</p>`;
+
+                if (Mu_cap >= Mu) {
+                    safeFlexure = true;
+                    details += `<p class="text-green-600 font-bold">Verdict (Flexure): $M_{u, \text{cap}} \ge M_{u}$. Section is SAFE in Flexure.</p>`;
+                } else {
+                    safeFlexure = false;
+                    details += `<p class="text-red-600 font-bold">Verdict (Flexure): $M_{u, \text{cap}} < M_{u}$. Section is UNSAFE in Flexure.</p>`;
+                }
+
+                // --- SHEAR CAPACITY ($V_{u,cap}$) ---
+                details += `<h3 class="font-bold text-lg text-gray-800 border-b mt-4 pb-1">Shear Analysis (IS 456:2000, Cl. 40 & 41)</h3>`;
+
+                // 1. Equivalent Shear (Cl 41.3.1)
+                const Ve = Vu + 1.6 * (Tu / b); // Ve in N
+                const Vu_req = Vu + (1.6 * Tu) / b; // kN for display
+                details += `<p>Equivalent Shear ($V_{e}$): ${(Ve / 1e3).toFixed(2)} kN</p>`;
+
+                // 2. Nominal Shear Stress (Cl 40.1)
+                const tau_v = Ve / (b * d); // N/mm²
+                details += `<p>Nominal Shear Stress ($\\tau_{v}$): ${tau_v.toFixed(3)} N/mm²</p>`;
+
+                // 3. Max Shear Stress (Cl 40.2 / Table 20)
+                const tau_c_max = TAU_C_MAX_TABLE[fck.toString()] || 3.1; // Default to M25
+                details += `<p>Maximum Shear Stress ($\\tau_{c, \max}$): ${tau_c_max.toFixed(2)} N/mm²</p>`;
+
+                // Check 1: Maximum Limit
+                if (tau_v > tau_c_max) {
+                    details += `<p class="text-red-600 font-bold">Verdict (Shear - $\\tau_{c, \max}$): $\\tau_{v}$ is TOO HIGH. Section is UNSAFE in Shear.</p>`;
+                    safeShear = false;
+                } else {
+                    // 4. Design Shear Strength of Concrete (Cl 40.2 / Table 19)
+                    const pt = (Ast / (b * d)) * 100;
+                    const tau_c = getConcreteShearStrength(fck.toString(), pt); // N/mm²
+                    details += `<p>Design Shear Strength of Concrete ($\\tau_{c}$): ${tau_c.toFixed(3)} N/mm²</p>`;
+
+                    // 5. Shear Force taken by Stirrups (Vus)
+                    const Asv = nlegs * (PI * phiv * phiv / 4); // Area of shear steel (mm²)
+                    // Vus = 0.87 * fy * Asv * d / sv (Cl 40.4)
+                    const Vus = 0.87 * fy * Asv * d / sv; // N
+                    const Vus_kN = Vus / 1e3;
+                    details += `<p>Shear Force taken by Stirrups ($V_{us}$): ${Vus_kN.toFixed(2)} kN</p>`;
+
+                    // 6. Total Shear Capacity Check (Vuc + Vus)
+                    // The code follows a different approach for Vc and Vs: Vs = Vu - Vc
+                    // For a check, we ensure (Vu - Vc) <= Vus
+                    const Vuc = tau_c * b * d; // N
+                    const Vs_req = Ve - Vuc; // Shear force required to be resisted by steel (N)
+                    const Vs_req_kN = Vs_req / 1e3;
+                    details += `<p>Shear Force resisted by Concrete ($V_{uc}$): ${(Vuc / 1e3).toFixed(2)} kN</p>`;
+
+                    if (Vs_req <= 0) {
+                        // Concrete can resist all shear (Vuc >= Ve) - Minimum stirrups still required
+                        const Vus_min_req = 0.4 * b * d; // N (Min Vus required if Vuc > Ve)
+                        if (Vus >= Vus_min_req) {
+                            safeShear = true;
+                            details += `<p class="text-green-600 font-bold">Verdict (Shear): $V_{uc} \ge V_{e}$. Minimum stirrups provided are sufficient (Vus: ${Vus_kN.toFixed(2)} kN > ${ (Vus_min_req/1e3).toFixed(2) } kN min). Section is SAFE in Shear.</p>`;
+                        } else {
+                            safeShear = false;
+                            details += `<p class="text-red-600 font-bold">Verdict (Shear): $V_{uc} \ge V_{e}$. BUT, provided stirrups (Vus: ${Vus_kN.toFixed(2)} kN) are LESS than Minimum required (0.4bd = ${ (Vus_min_req/1e3).toFixed(2) } kN). Section is UNSAFE in Shear (Min. Reinf.).</p>`;
+                        }
+                    } else {
+                        // Stirrups are necessary (Vs_req > 0)
+                        details += `<p>Shear force to be resisted by steel ($V_{us, \text{req}}$): ${Vs_req_kN.toFixed(2)} kN</p>`;
+                        if (Vus >= Vs_req) {
+                            safeShear = true;
+                            details += `<p class="text-green-600 font-bold">Verdict (Shear): $V_{us, \text{provided}} \ge V_{us, \text{required}}$. Section is SAFE in Shear.</p>`;
+                        } else {
+                            safeShear = false;
+                            details += `<p class="text-red-600 font-bold">Verdict (Shear): $V_{us, \text{provided}} < V_{us, \text{required}}$. Section is UNSAFE in Shear.</p>`;
+                        }
+                    }
+
+                }
+
+                // --- FINAL VERDICT ---
+                if (safeFlexure && safeShear) {
+                    verdictContainer.className = 'mb-4 p-3 rounded-xl text-center font-extrabold text-2xl bg-green-200 text-green-800 shadow-lg';
+                    verdictContainer.textContent = 'FINAL VERDICT: SECTION IS SAFE';
+                } else {
+                    verdictContainer.className = 'mb-4 p-3 rounded-xl text-center font-extrabold text-2xl bg-red-200 text-red-800 shadow-lg';
+                    verdictContainer.textContent = 'FINAL VERDICT: SECTION IS UNSAFE';
+                }
+
+                document.getElementById('calculation-details').innerHTML += details;
+
+            } catch (error) {
+                // Handle calculation or input errors
+                console.error("Calculation Error:", error);
+                document.getElementById('error-message').textContent = 'Error: ' + error.message;
+                document.getElementById('error-message').classList.remove('hidden');
+                verdictContainer.className = 'mb-4 p-3 rounded-lg text-center font-extrabold text-lg bg-yellow-100 text-yellow-800';
+                verdictContainer.textContent = 'Calculation Failed. Check Inputs.';
+            }
+        }
+    </script>
+</body>
+</html>
