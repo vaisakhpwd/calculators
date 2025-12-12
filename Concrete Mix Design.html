@@ -251,7 +251,7 @@
 
                     <div class="input-group">
                         <label for="admixture_type" class="block text-sm text-gray-700 mb-1">Chemical Admixture Type</label>
-                        <select id="admixture_type" class="input-field bg-white" onchange="calculateMix()">
+                        <select id="admixture_type" class="input-field bg-white" onchange="handleAdmixtureChange(); calculateMix();">
                             <option value="Superplasticizer" selected>Superplasticizer</option>
                             <option value="Retarder">Retarding Admixture</option>
                             <option value="Accelerator">Accelerating Admixture</option>
@@ -426,6 +426,27 @@
             document.getElementById('error-message').classList.add('hidden');
         }
 
+        // --- NEW FUNCTION TO HANDLE ADMIXTURE INPUT CHANGES ---
+        function handleAdmixtureChange() {
+            const admixtureType = document.getElementById('admixture_type').value;
+            const waterReductionInput = document.getElementById('water_reduction_input');
+            const sgAdmixture = document.getElementById('sg_admixture');
+            const admixturePercent = document.getElementById('admixture_percent');
+
+            if (admixtureType === 'None') {
+                waterReductionInput.value = 0;
+                sgAdmixture.value = 1.000;
+                admixturePercent.value = 0.0;
+            } else {
+                // Restore default values for any admixture type other than 'None'
+                waterReductionInput.value = 23;
+                sgAdmixture.value = 1.145;
+                admixturePercent.value = 1.0;
+            }
+        }
+        // --- END NEW FUNCTION ---
+
+
         function getFWCRatioForTargetStrength(fck_target, cementType) {
             let strengthMap = FWC_RATIO_TARGET_STRENGTH_OPC53;
             let curveName = 'Curve 1 (OPC 53 Grade)';
@@ -597,7 +618,7 @@
             let water_reduction_percent = 0;
             let water_content_net = water_content_slump;
             
-            if (admixtureDosagePercent > 0 && admixtureType === 'Superplasticizer') {
+            if (admixtureType === 'Superplasticizer' && waterReductionInput > 0) {
                  // Use the user's input reduction rate
                  let reduction_from_trial = waterReductionInput; 
                  let reduction_reason = `Based on User Input Reduction Rate (${(waterReductionInput * 100).toFixed(0)}%).`;
@@ -653,6 +674,7 @@
 
             const V_c = (final_cement_content / S_cement) * (1 / 1000);
             const V_w = (final_water_content / 1.0) * (1 / 1000); 
+            // V_ad uses the potentially adjusted S_admixture
             const V_ad = (admixture_content / S_admixture) * (1 / 1000);
             
             const V_non_agg_plus_air = V_c + V_w + V_ad + V_air;
@@ -981,11 +1003,12 @@
                 const year = now.getFullYear();
                 dateInput.value = `${day}/${month}/${year}`;
             }
+            // Ensure initial defaults match Superplasticizer since it is the default selection
+            handleAdmixtureChange(); 
             calculateMix();
         };
 
     </script>
-    <!-- Footer -->
     <footer class="mt-8 pb-4 text-center text-sm text-red-600">
         <p>Conceived and developed by Vaisakh G.</p>
         <p>Queries and suggestions: WhatsApp 9656840794</p>
