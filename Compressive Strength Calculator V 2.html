@@ -324,8 +324,9 @@
                             <th>H (mm)</th>
                             <th>Weight (kg)</th>
                             <th>Load (kN)</th>
+			    <th class="bg-yellow-200">Density (g/cm³)</th>
                             <th class="bg-yellow-200">Strength (N/mm²)</th>
-                            <th class="bg-yellow-200">Density (g/cm³)</th>
+                            
                             <th class="bg-yellow-200">% Var</th>
                             <th class="bg-blue-200">Avg Strength</th>
                             <th class="bg-blue-200">Acceptable</th>
@@ -903,13 +904,15 @@
                     row.insertCell().textContent = cube.W.toFixed(2);
                     row.insertCell().textContent = cube.Load.toFixed(2);
 
+                    const densityCell = row.insertCell();
+                    densityCell.textContent = cube.density.toFixed(2);
+                    densityCell.className = 'bg-yellow-100';
+
                     const strengthCell = row.insertCell();
                     strengthCell.textContent = cube.strength.toFixed(2);
                     strengthCell.className = 'bg-yellow-100';
                     
-                    const densityCell = row.insertCell();
-                    densityCell.textContent = cube.density.toFixed(2);
-                    densityCell.className = 'bg-yellow-100';
+
 
                     const varCell = row.insertCell();
                     varCell.textContent = `${cube.percentVariation.toFixed(2)}%`;
@@ -1225,8 +1228,9 @@
                 { header: 'L', dataKey: 'L' }, { header: 'B', dataKey: 'B' }, { header: 'H', dataKey: 'H' },
                 { header: 'Weight (kg)', dataKey: 'W' },
                 { header: 'Load (kN)', dataKey: 'Load' },
+                { header: 'Density', dataKey: 'density' },    
                 { header: 'Strength', dataKey: 'strength' },
-                { header: 'Density', dataKey: 'density' },
+
                 { header: '% Var', dataKey: 'pVar' },
                 { header: 'Avg Strength', dataKey: 'avg' },
                 { header: 'Accept', dataKey: 'accept' }
@@ -1245,8 +1249,9 @@
                         L: cube.L.toFixed(0), B: cube.B.toFixed(0), H: cube.H.toFixed(0),
                         W: cube.W.toFixed(2),
                         Load: cube.Load.toFixed(2),
+                        density: cube.density.toFixed(2),                        
                         strength: cube.strength.toFixed(2),
-                        density: cube.density.toFixed(2),
+
                         pVar: `${cube.percentVariation.toFixed(2)}%`,
                         avg: avgStrengthText,
                         accept: acceptableText
@@ -1451,3 +1456,4 @@
 </body>
 
 </html>
+
