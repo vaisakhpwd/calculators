@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Levelling Calculator V1.3</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        input[type="radio"] { display: none; }
+        #sight-bs:checked + label { @apply bg-blue-50 border-blue-500 ring-2 ring-blue-500; }
+        #sight-is:checked + label { @apply bg-gray-50 border-gray-500 ring-2 ring-gray-500; }
+        #sight-fs:checked + label { @apply bg-red-50 border-red-500 ring-2 ring-red-500; }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen p-4 md:p-8">
+    <div class="max-w-4xl mx-auto">
+        <header class="mb-6 text-center">
+            <h1 class="text-3xl font-bold text-gray-800">Levelling Survey Calculator</h1>
+            <p class="text-gray-600">Companion of Civil Engineers</p>
+        </header>
+
+        <div class="bg-white rounded-xl shadow-lg p-4 md:p-6 mb-6" id="project-details-card"> 
+            <h2 class="text-xl font-semibold mb-4 border-b pb-2">Project Details</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label for="project-name" class="block text-sm font-medium text-gray-700 mb-1">Project Name</label>
+                    <input type="text" id="project-name" class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="e.g., Site Grading Plan">
+                </div>
+                <div>
+                    <label for="project-date" class="block text-sm font-medium text-gray-700 mb-1">Date</label>
+                    <input type="date" id="project-date" class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div class="md:col-span-2">
+                    <label for="project-desc" class="block text-sm font-medium text-gray-700 mb-1">Survey Description</label>
+                    <textarea id="project-desc" rows="2" class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="e.g., Levelling from TBM 1 to Site Corner"></textarea>
+                </div>
+            </div>
+            <button id="start-survey-btn" class="w-full px-4 py-2 rounded-lg text-white font-semibold shadow-md bg-blue-600 hover:bg-blue-700 mt-4">Start Survey</button>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-lg p-4 md:p-6 mb-6 hidden" id="data-entry-card">
+            <h2 class="text-xl font-semibold mb-4 border-b pb-2">Add New Reading</h2>
+            <form id="reading-form">
+                <div class="mb-4">
+                    <span class="block text-sm font-medium text-gray-700 mb-2">Sight Type</span>
+                    <div class="grid grid-cols-3 gap-2">
+                        <div>
+                            <input type="radio" id="sight-bs" name="sight-type" value="BS" checked>
+                            <label for="sight-bs" class="flex items-center justify-center p-3 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50">BS</label>
+                        </div>
+                        <div>
+                            <input type="radio" id="sight-is" name="sight-type" value="IS">
+                            <label for="sight-is" class="flex items-center justify-center p-3 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50">IS</label>
+                        </div>
+                        <div>
+                            <input type="radio" id="sight-fs" name="sight-type" value="FS">
+                            <label for="sight-fs" class="flex items-center justify-center p-3 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50">FS</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                    <div id="initial-rl-group">
+                        <label for="initial-rl" class="block text-sm font-medium text-gray-700 mb-1">Benchmark RL</label>
+                        <input type="number" step="0.001" id="initial-rl" class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500" placeholder="100.000">
+                    </div>
+                    <div>
+                        <label for="sight-value" class="block text-sm font-medium text-gray-700 mb-1">Reading Value (m)</label>
+                        <input type="text" inputmode="decimal" id="sight-value" class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500" required>
+                    </div>
+                    <div class="hidden" id="cp-bs-group">
+                        <label for="cp-bs-value" class="block text-sm font-medium mb-1 font-bold text-blue-600">CP: New BS (New Setup)</label>
+                        <input type="text" inputmode="decimal" id="cp-bs-value" class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500">
+                    </div>
+                </div>
+                
+                <div class="mb-4">
+                    <label for="reading-remarks" class="block text-sm font-medium text-gray-700 mb-1">Remarks</label>
+                    <input type="text" id="reading-remarks" class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500">
+                </div>
+
+                <div class="mb-4 hidden" id="change-point-group">
+                    <div class="flex items-center">
+                        <input id="is-change-point" type="checkbox" class="h-4 w-4 text-blue-600 border-gray-300 rounded">
+                        <label for="is-change-point" class="ml-2 block text-sm font-medium text-gray-900">This is a Change Point (CP)</label>
+                    </div>
+                </div>
+
+                <button type="submit" class="w-full px-4 py-2 rounded-lg text-white font-semibold shadow-md bg-green-600 hover:bg-green-700">Add Reading</button>
+            </form>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-lg p-4 md:p-6">
+            <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-4 gap-3">
+                <h2 class="text-xl font-semibold">Survey Data</h2>
+                <div class="flex flex-wrap gap-2">
+                    <button id="save-json-btn" class="px-3 py-2 text-sm rounded-lg text-white bg-blue-600 hover:bg-blue-700">Save File</button>
+                    <label for="load-json-input" class="px-3 py-2 text-sm rounded-lg text-white bg-indigo-600 hover:bg-indigo-700 cursor-pointer text-center">Open File</label>
+                    <input type="file" id="load-json-input" class="hidden" accept=".json">
+                    <button id="export-pdf-btn" class="px-3 py-2 text-sm rounded-lg text-white bg-gray-600 hover:bg-gray-700">Export PDF</button>
+                    <button id="clear-data-btn" class="px-3 py-2 text-sm rounded-lg text-white bg-red-500 hover:bg-red-600">Reset</button>
+                </div>
+            </div>
+            
+            <div class="overflow-x-auto rounded-lg border border-gray-200">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Sl.</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">BS</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">IS</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">FS</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">HI</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">RL</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Remarks</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200" id="survey-table-body"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div id="edit-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-50">
+        <div class="relative top-20 mx-auto p-5 border w-full max-w-md shadow-lg rounded-xl bg-white">
+            <div class="flex justify-between items-center mb-4 border-b pb-2">
+                <h3 class="text-xl font-semibold">Edit Reading</h3>
+                <button id="close-modal-btn" class="text-gray-400 hover:text-gray-600 text-3xl">&times;</button>
+            </div>
+            <form id="edit-form">
+                <input type="hidden" id="edit-row-index">
+                <div class="mb-4">
+                    <label for="edit-bs" class="block text-sm font-medium text-gray-700 mb-1">BS</label>
+                    <input type="number" step="0.001" id="edit-bs" class="w-full px-3 py-2 border border-gray-300 rounded-lg">
+                </div>
+                <div class="mb-4">
+                    <label for="edit-is" class="block text-sm font-medium text-gray-700 mb-1">IS</label>
+                    <input type="number" step="0.001" id="edit-is" class="w-full px-3 py-2 border border-gray-300 rounded-lg">
+                </div>
+                <div class="mb-4">
+                    <label for="edit-fs" class="block text-sm font-medium text-gray-700 mb-1">FS</label>
+                    <input type="number" step="0.001" id="edit-fs" class="w-full px-3 py-2 border border-gray-300 rounded-lg">
+                </div>
+                <div class="mb-4 hidden" id="edit-rl-group">
+                    <label for="edit-rl" class="block text-sm font-medium text-gray-700 mb-1">RL</label>
+                    <input type="number" step="0.001" id="edit-rl" class="w-full px-3 py-2 border border-gray-300 rounded-lg">
+                </div>
+                <div class="mb-4">
+                    <label for="edit-remarks" class="block text-sm font-medium text-gray-700 mb-1">Remarks</label>
+                    <input type="text" id="edit-remarks" class="w-full px-3 py-2 border border-gray-300 rounded-lg">
+                </div>
+                <div class="flex justify-end gap-2">
+                    <button type="button" id="delete-row-btn" class="px-4 py-2 rounded-lg text-white bg-red-600">Delete</button>
+                    <button type="submit" class="px-4 py-2 rounded-lg text-white bg-green-600">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <footer class="mt-8 pb-4 text-center text-sm text-red-600">
+        <p>Conceived and developed by Vaisakh G.</p>
+        <p>Queries and suggestions: WhatsApp 9656840794</p>
+    </footer>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            let surveyRows = []; 
+            let projectInfo = { name: '', description: '', date: '' };
+
+            const projectDetailsCard = document.getElementById('project-details-card');
+            const dataEntryCard = document.getElementById('data-entry-card');
+            const readingForm = document.getElementById('reading-form');
+            const tableBody = document.getElementById('survey-table-body');
+            const datePicker = document.getElementById('project-date');
+
+            // --- DATE UTILITIES ---
+            
+            // Returns current date in YYYY-MM-DD for the input picker
+            function getCurrentISODate() {
+                return new Date().toISOString().split('T')[0];
+            }
+
+            // Converts YYYY-MM-DD to DD/MM/YYYY for the PDF/App display
+            function formatToUserDate(isoDate) {
+                if (!isoDate) return '';
+                const [y, m, d] = isoDate.split('-');
+                return `${d}/${m}/${y}`;
+            }
+
+            // Set picker to current date on load
+            datePicker.value = getCurrentISODate();
+
+            // Persist to Local Storage
+            const saveToLocal = () => {
+                localStorage.setItem('levelling_data', JSON.stringify({ surveyRows, projectInfo }));
+            };
+
+            const loadFromLocal = () => {
+                const saved = localStorage.getItem('levelling_data');
+                if (saved) {
+                    const data = JSON.parse(saved);
+                    surveyRows = data.surveyRows || [];
+                    projectInfo = data.projectInfo || {};
+                    if (surveyRows.length > 0) {
+                        projectDetailsCard.classList.add('hidden');
+                        dataEntryCard.classList.remove('hidden');
+                        renderTable();
+                    }
+                }
+            };
+
+            document.getElementById('start-survey-btn').addEventListener('click', () => {
+                projectInfo.name = document.getElementById('project-name').value || 'N/A';
+                // Store the raw ISO date from the picker
+                projectInfo.date = datePicker.value || getCurrentISODate();
+                projectInfo.description = document.getElementById('project-desc').value || 'N/A';
+                
+                projectDetailsCard.classList.add('hidden');
+                dataEntryCard.classList.remove('hidden');
+                updateFormForSightType('BS');
+                saveToLocal();
+            });
+
+            // JSON File Management
+            document.getElementById('save-json-btn').addEventListener('click', () => {
+                const dataStr = JSON.stringify({ surveyRows, projectInfo }, null, 2);
+                const blob = new Blob([dataStr], { type: "application/json" });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `${projectInfo.name.replace(/\s+/g, '_')}_survey.json`;
+                link.click();
+            });
+
+            document.getElementById('load-json-input').addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    const data = JSON.parse(event.target.result);
+                    surveyRows = data.surveyRows;
+                    projectInfo = data.projectInfo;
+                    renderTable();
+                    dataEntryCard.classList.remove('hidden');
+                    projectDetailsCard.classList.add('hidden');
+                    saveToLocal();
+                };
+                reader.readAsText(file);
+            });
+
+            document.getElementById('clear-data-btn').addEventListener('click', () => {
+                if(confirm("Clear all data?")) {
+                    localStorage.removeItem('levelling_data');
+                    location.reload();
+                }
+            });
+
+            // Core Logic Functions
+            function updateFormForSightType(sightType) {
+                const isFirst = surveyRows.length === 0;
+                document.getElementById('initial-rl-group').classList.toggle('hidden', !isFirst);
+                const cpGroup = document.getElementById('change-point-group');
+                const isCPChecked = document.getElementById('is-change-point').checked;
+                cpGroup.classList.toggle('hidden', sightType !== 'FS' || isFirst);
+                document.getElementById('cp-bs-group').classList.toggle('hidden', !isCPChecked || sightType !== 'FS');
+                
+                if (isFirst) {
+                    document.getElementById('reading-remarks').value = 'TBM 1';
+                } else if (sightType === 'FS') {
+                    document.getElementById('reading-remarks').value = isCPChecked ? 'Change Point' : 'End Point';
+                }
+            }
+
+            document.getElementsByName('sight-type').forEach(r => r.addEventListener('change', e => updateFormForSightType(e.target.value)));
+            document.getElementById('is-change-point').addEventListener('change', () => updateFormForSightType('FS'));
+
+            readingForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const sightType = document.querySelector('input[name="sight-type"]:checked').value;
+                const sightValueInput = document.getElementById('sight-value');
+                const val = parseFloat(sightValueInput.value);
+                const isCP = document.getElementById('is-change-point').checked && sightType === 'FS';
+
+                let row = { sl: surveyRows.length + 1, bs: null, is: null, fs: null, remarks: document.getElementById('reading-remarks').value, initialRL: null };
+
+                if (surveyRows.length === 0) {
+                    row.bs = val;
+                    row.initialRL = parseFloat(document.getElementById('initial-rl').value);
+                } else {
+                    if (sightType === 'BS') row.bs = val;
+                    else if (sightType === 'IS') row.is = val;
+                    else if (sightType === 'FS') {
+                        row.fs = val;
+                        if (isCP) row.bs = parseFloat(document.getElementById('cp-bs-value').value);
+                    }
+                }
+
+                surveyRows.push(row);
+                saveToLocal();
+                renderTable();
+                readingForm.reset();
+                updateFormForSightType('IS');
+                document.getElementById('sight-is').checked = true;
+            });
+
+            function calculateAndRender() {
+                let hi = 0;
+                return surveyRows.map((row, i) => {
+                    let calc = { ...row };
+                    if (i === 0) {
+                        calc.rl = row.initialRL;
+                        calc.hi = row.initialRL + row.bs;
+                        hi = calc.hi;
+                    } else {
+                        if (row.is) { calc.rl = hi - row.is; calc.hi = hi; }
+                        else if (row.fs) {
+                            calc.rl = hi - row.fs;
+                            if (row.bs) { calc.hi = calc.rl + row.bs; hi = calc.hi; }
+                            else calc.hi = hi;
+                        } else if (row.bs) {
+                            calc.rl = surveyRows[i-1].rl;
+                            calc.hi = calc.rl + row.bs;
+                            hi = calc.hi;
+                        }
+                    }
+                    return calc;
+                });
+            }
+
+            function renderTable() {
+                const data = calculateAndRender();
+                tableBody.innerHTML = data.length ? '' : '<tr><td colspan="8" class="p-4 text-center">No data</td></tr>';
+                data.forEach((row, idx) => {
+                    const tr = document.createElement('tr');
+                    const fmt = v => (v != null && !isNaN(v)) ? v.toFixed(3) : '';
+                    tr.innerHTML = `<td class="p-3">${row.sl}</td><td class="p-3 text-blue-700">${fmt(row.bs)}</td><td class="p-3">${fmt(row.is)}</td><td class="p-3 text-red-700">${fmt(row.fs)}</td><td class="p-3 font-semibold">${fmt(row.hi)}</td><td class="p-3 font-bold">${fmt(row.rl)}</td><td class="p-3">${row.remarks}</td><td class="p-3"><button onclick="window.editRow(${idx})" class="text-blue-600">Edit</button></td>`;
+                    tableBody.appendChild(tr);
+                });
+            }
+
+            document.getElementById('export-pdf-btn').addEventListener('click', () => {
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF();
+                const data = calculateAndRender();
+                
+                // Title wrapping fix
+                doc.setFontSize(14);
+                const splitTitle = doc.splitTextToSize(projectInfo.name, 180);
+                doc.text(splitTitle, 105, 15, { align: 'center' });
+
+                doc.setFontSize(10);
+                // Convert stored ISO date to DD/MM/YYYY for the PDF
+                const displayDate = formatToUserDate(projectInfo.date);
+                doc.text(`Date: ${displayDate}`, 14, 25);
+                doc.text(`Description: ${projectInfo.description}`, 14, 30);
+
+                doc.autoTable({
+                    head: [['Sl.', 'BS', 'IS', 'FS', 'HI', 'RL', 'Remarks']],
+                    body: data.map(r => [r.sl, r.bs?.toFixed(3)||'', r.is?.toFixed(3)||'', r.fs?.toFixed(3)||'', r.hi?.toFixed(3)||'', r.rl?.toFixed(3)||'', r.remarks]),
+                    startY: 40,
+                    headStyles: { fillColor: [22, 160, 133] }
+                });
+                doc.save(`${projectInfo.name.replace(/\s+/g, '_')}.pdf`);
+            });
+
+            window.editRow = (idx) => {
+                const row = surveyRows[idx];
+                document.getElementById('edit-row-index').value = idx;
+                document.getElementById('edit-bs').value = row.bs || '';
+                document.getElementById('edit-is').value = row.is || '';
+                document.getElementById('edit-fs').value = row.fs || '';
+                document.getElementById('edit-remarks').value = row.remarks || '';
+                document.getElementById('edit-rl-group').classList.toggle('hidden', idx !== 0);
+                if(idx === 0) document.getElementById('edit-rl').value = row.initialRL;
+                document.getElementById('edit-modal').classList.remove('hidden');
+            };
+
+            document.getElementById('edit-form').addEventListener('submit', (e) => {
+                e.preventDefault();
+                const idx = document.getElementById('edit-row-index').value;
+                const row = surveyRows[idx];
+                row.bs = parseFloat(document.getElementById('edit-bs').value) || null;
+                row.is = parseFloat(document.getElementById('edit-is').value) || null;
+                row.fs = parseFloat(document.getElementById('edit-fs').value) || null;
+                row.remarks = document.getElementById('edit-remarks').value;
+                if(idx == 0) row.initialRL = parseFloat(document.getElementById('edit-rl').value);
+                document.getElementById('edit-modal').classList.add('hidden');
+                saveToLocal();
+                renderTable();
+            });
+
+            document.getElementById('delete-row-btn').addEventListener('click', () => {
+                const idx = document.getElementById('edit-row-index').value;
+                surveyRows.splice(idx, 1);
+                surveyRows.forEach((r, i) => r.sl = i + 1);
+                document.getElementById('edit-modal').classList.add('hidden');
+                saveToLocal();
+                renderTable();
+            });
+
+            document.getElementById('close-modal-btn').addEventListener('click', () => document.getElementById('edit-modal').classList.add('hidden'));
+            
+            loadFromLocal();
+        });
+    </script>
+</body>
+</html>
