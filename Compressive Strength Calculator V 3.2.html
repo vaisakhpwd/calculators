@@ -1182,7 +1182,7 @@
             const docWidth = doc.internal.pageSize.getWidth();
 
             // --- Header ---
-            doc.setFontSize(18);
+            doc.setFontSize(14);
             doc.setFont(undefined, 'bold');
             doc.text("Concrete Cube Compressive Strength Report", docWidth / 2, y, { align: 'center' });
             y += lineHeight;
@@ -1196,48 +1196,50 @@
                 // Use full TC name
                 references += ", Kerala PWD TC CE/DESIGN/QC/15/2019 dated 16/05/2019";
             }
-            doc.setFontSize(10);
+            doc.setFontSize(12);
             doc.text(references, docWidth / 2, y, { align: 'center' });
-            y += lineHeight * 2; // Add extra space after references
+            y += lineHeight; // Add extra space after references
 
 
             // --- Project Details ---
-            doc.setFontSize(14);
+            doc.setFontSize(12);
             doc.setFont(undefined, 'bold');
             doc.text("Project Details", margin, y);
             y += lineHeight;
 
-            doc.setFontSize(10);
+            doc.setFontSize(12);
             doc.setFont(undefined, 'normal');
-            
+            doc.text(`Project Name: ${state.projectName}`, margin, y); y += lineHeight;
+            doc.text(`Location: ${state.location}`, margin, y);  y += lineHeight;
+
             const col1_x = margin;
             const col2_x = margin + 100;
             let y_col1 = y;
             let y_col2 = y;
             
-            doc.text(`Project Name: ${state.projectName}`, col1_x, y_col1); y_col1 += lineHeight;
-            doc.text(`Location: ${state.location}`, col1_x, y_col1); y_col1 += lineHeight;
             doc.text(`Concrete Grade: M${state.concreteGrade} N/mm²`, col1_x, y_col1); y_col1 += lineHeight;
             doc.text(`Mix Type: ${state.mixType}`, col1_x, y_col1); y_col1 += lineHeight;
             
-            doc.text(`Quantity of Concrete: ${state.quantity} m³`, col2_x, y_col2); y_col2 += lineHeight;
-            doc.text(`Number of Samples Tested: ${state.numSamples}`, col2_x, y_col2); y_col2 += lineHeight;
+            doc.text(`Quantity of Concrete: ${state.quantity} m³`,  col1_x, y_col1); y_col1 += lineHeight;
+            doc.text(`Number of Samples Tested: ${state.numSamples}`,  col1_x, y_col1); y_col1 += lineHeight;
+
             doc.text(`Date of Casting: ${state.dateCasting}`, col2_x, y_col2); y_col2 += lineHeight;
             doc.text(`Date of Testing: ${state.dateTesting}`, col2_x, y_col2); y_col2 += lineHeight;
             doc.text(`Age of Specimen: ${state.ageSpecimen} Days`, col2_x, y_col2); y_col2 += lineHeight;
 
-            y = Math.max(y_col1, y_col2) + lineHeight;
+            y = Math.max(y_col1, y_col2);
+            y += lineHeight/2;
 
-            // --- Acceptance Criteria ---
-            doc.setFontSize(14);
-            doc.setFont(undefined, 'bold');
-            doc.text("Acceptance Criteria & Verdict", margin, y);
-            y += lineHeight;
-            doc.setFontSize(10);
-            doc.setFont(undefined, 'normal');
-            
             y_col1 = y;
             y_col2 = y;
+
+            // --- Acceptance Criteria ---
+            doc.setFontSize(12);
+            doc.setFont(undefined, 'bold');
+            doc.text("Acceptance Criteria", col1_x, y_col1); y_col1 += lineHeight;
+            doc.setFontSize(12);
+            doc.setFont(undefined, 'normal');
+            
 
             // Dynamic Criteria Text in PDF
             if (state.isPwdWork) {
@@ -1266,31 +1268,32 @@
 
             doc.setFontSize(12);
             doc.setFont(undefined, 'bold');
-            doc.text(`Test Result Verdict: ${state.verdict}`, col2_x, y_col2); y_col2 += lineHeight;
-            doc.setFontSize(10);
+            doc.text(`Test Result: ${state.verdict}`, col2_x, y_col2); y_col2 += lineHeight;
+            doc.setFontSize(12);
             doc.setFont(undefined, 'normal');
             doc.text(`Observed Mean Strength (Accepted Samples): ${state.meanStrength.toFixed(2)} N/mm²`, col2_x, y_col2); y_col2 += lineHeight;
             doc.text(`Observed Min Strength (Accepted Samples): ${state.minStrength.toFixed(2)} N/mm²`, col2_x, y_col2); y_col2 += lineHeight;
 
-            y = Math.max(y_col1, y_col2) + lineHeight * 2;
+            y = Math.max(y_col1, y_col2);
+            y += lineHeight/2;
 
 
             // --- Detailed Sample Data Table ---
-            doc.setFontSize(14);
+            doc.setFontSize(12);
             doc.setFont(undefined, 'bold');
-            doc.text("Detailed Sample Data & Calculation Trace", margin, y);
-            y += lineHeight;
+            doc.text("Detailed Sample Data & Calculation", margin, y);
+            y += lineHeight/2;
 
             const tableColumns = [
                 { header: 'Sample', dataKey: 'sample' },
                 { header: 'Cube ID', dataKey: 'id' },
-                { header: 'L', dataKey: 'L' }, { header: 'B', dataKey: 'B' }, { header: 'H', dataKey: 'H' },
+                { header: 'L (mm)', dataKey: 'L' }, { header: 'B (mm)', dataKey: 'B' }, { header: 'H (mm)', dataKey: 'H' },
                 { header: 'Weight (kg)', dataKey: 'W' },
                 { header: 'Load (kN)', dataKey: 'Load' },
-                { header: 'Density', dataKey: 'density' },    
-                { header: 'Strength', dataKey: 'strength' },
+                { header: 'Density (g/cm3)', dataKey: 'density' },    
+                { header: 'Strength (kN/m2)', dataKey: 'strength' },
+                { header: 'Average Strength (kN/m2)', dataKey: 'avg' },
                 { header: '% Variation', dataKey: 'pVar' },
-                { header: 'Average Strength', dataKey: 'avg' },
                 { header: 'Acceptable', dataKey: 'accept' }
             ];
             
@@ -1309,9 +1312,8 @@
                         Load: cube.Load.toFixed(2),
                         density: cube.density.toFixed(2),                        
                         strength: cube.strength.toFixed(2),
-
-                        pVar: `${cube.percentVariation.toFixed(2)}%`,
                         avg: avgStrengthText,
+                        pVar: `${cube.percentVariation.toFixed(2)}%`,
                         accept: acceptableText
                     };
                     tableRows.push(row);
@@ -1323,16 +1325,16 @@
                 head: [tableColumns.map(col => col.header)],
                 body: tableRows.map(row => Object.values(row)),
                 theme: 'grid',
-                styles: { fontSize: 8, cellPadding: 1, overflow: 'linebreak', halign: 'center', textColor: '#000000' },
+                styles: { fontSize: 10, cellPadding: 1, overflow: 'linebreak', halign: 'center', textColor: '#000000' },
                 headStyles: { fillColor: [52, 73, 94], fontStyle: 'bold', textColor: '#FFFFFF' }, 
                 didParseCell: (data) => {
                     const col = data.column.index;
                     
-                    if (col >= 7 && col <= 9) { // Strength, Density, %Var
+                    if (col >= 7 && col <= 9) { // Strength, Density, Avg Strength
                         data.cell.styles.fillColor = [255, 255, 204]; // Yellow
                         data.cell.styles.textColor = '#000000'; // Black text
                     }
-                    if (col === 10 || col === 11) { // Avg Strength, Accept
+                    if (col === 10 || col === 11) { // %Var, Accept
                          data.cell.styles.fillColor = [204, 229, 255]; // Blue
                          data.cell.styles.textColor = '#000000'; // Black text
                          if (col === 11 && (data.cell.text === 'NO' || data.cell.text === 'N/A')) {
