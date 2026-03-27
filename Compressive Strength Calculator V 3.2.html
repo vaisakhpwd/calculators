@@ -1217,11 +1217,11 @@
             let y_col1 = y;
             let y_col2 = y;
             
-            doc.text(`Concrete Grade: M${state.concreteGrade} N/mm²`, col1_x, y_col1); y_col1 += lineHeight;
-            doc.text(`Mix Type: ${state.mixType}`, col1_x, y_col1); y_col1 += lineHeight;
+            doc.text(`Concrete Grade: M${state.concreteGrade} `, col1_x, y_col1); y_col1 += lineHeight;
             
             doc.text(`Quantity of Concrete: ${state.quantity} m³`,  col1_x, y_col1); y_col1 += lineHeight;
             doc.text(`Number of Samples Tested: ${state.numSamples}`,  col1_x, y_col1); y_col1 += lineHeight;
+            doc.text(`Mix Type: ${state.mixType}`, col1_x, y_col1); y_col1 += lineHeight;
 
             doc.text(`Date of Casting: ${state.dateCasting}`, col2_x, y_col2); y_col2 += lineHeight;
             doc.text(`Date of Testing: ${state.dateTesting}`, col2_x, y_col2); y_col2 += lineHeight;
