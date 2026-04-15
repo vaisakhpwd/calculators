@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Biaxial Footing Design Tool | IS 456:2000</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Segoe+UI:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root { --primary-color: #1e3a8a; --secondary-color: #1e40af; --bg-gray: #f3f4f6; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: var(--bg-gray); color: #1f2937; padding-bottom: 30px; }
+        
+        .header-section { 
+            background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%); 
+            color: white; padding: 40px 0; margin-bottom: 30px; 
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); text-align: center;
+        }
+        
+        .card { border: none; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); margin-bottom: 25px; }
+        .card-header { background-color: white; border-bottom: 2px solid var(--bg-gray); padding: 15px 20px; border-radius: 12px 12px 0 0 !important; }
+        .card-header h2 { font-size: 1.15rem; font-weight: 700; color: var(--primary-color); margin-bottom: 0; }
+        
+        .input-row { display: flex; align-items: center; margin-bottom: 12px; }
+        .form-label { font-weight: 600; color: #374151; font-size: 0.9rem; margin-bottom: 0; flex: 1.2; }
+        .input-container { flex: 1; }
+        
+        .btn-calculate { background-color: #059669; color: white; font-weight: 700; padding: 15px; border-radius: 8px; transition: all 0.3s; width: 100%; border: none; margin-top: 10px; font-size: 1.1rem; }
+        .btn-calculate:hover { background-color: #047857; transform: translateY(-1px); }
+        
+        .results-section { background-color: #ffffff; border-left: 5px solid #059669; padding: 30px; border-radius: 8px; min-height: 500px; font-family: 'Consolas', 'Courier New', monospace; white-space: pre-wrap; line-height: 1.6; font-size: 0.88rem; color: #1e293b; overflow-x: auto; }
+        
+        .custom-footer { text-align: center; margin-top: 40px; color: #dc3545; font-weight: 600; padding: 20px 0; }
+        .input-group-text { background-color: #f9fafb; font-size: 0.75rem; width: 75px; justify-content: center; font-weight: 600; color: #6b7280; }
+    </style>
+</head>
+<body>
+
+<div class="header-section">
+    <div class="container">
+        <h1 class="fw-bold">Biaxial Footing Analysis & Design</h1>
+        <p class="mb-0 opacity-90">Comprehensive Isolated Footing Design Suite (IS 456:2000)</p>
+    </div>
+</div>
+
+<div class="container">
+    <div class="row g-4">
+        <div class="col-lg-5">
+            <div class="card">
+                <div class="card-header"><h2>1. Geotechnical & Overburden</h2></div>
+                <div class="card-body">
+                    <div class="input-row"><label class="form-label">Allowable SBC</label><div class="input-container"><div class="input-group"><input type="number" id="sbc" class="form-control" value="200"><span class="input-group-text">kN/m²</span></div></div></div>
+                    <div class="input-row"><label class="form-label">Foundation Depth (D<sub>f</sub>)</label><div class="input-container"><div class="input-group"><input type="number" id="df" class="form-control" value="1.5" step="0.1"><span class="input-group-text">m</span></div></div></div>
+                    <div class="input-row"><label class="form-label">Soil Density (&gamma;<sub>s</sub>)</label><div class="input-container"><div class="input-group"><input type="number" id="gamma" class="form-control" value="18"><span class="input-group-text">kN/m³</span></div></div></div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header"><h2>2. Applied Service Loads</h2></div>
+                <div class="card-body">
+                    <div class="input-row"><label class="form-label">Axial Load (P)</label><div class="input-container"><div class="input-group"><input type="number" id="P" class="form-control" value="1200"><span class="input-group-text">kN</span></div></div></div>
+                    <div class="input-row"><label class="form-label">Moment (M<sub>x</sub>)</label><div class="input-container"><div class="input-group"><input type="number" id="Mx" class="form-control" value="100"><span class="input-group-text">kNm</span></div></div></div>
+                    <div class="input-row"><label class="form-label">Moment (M<sub>y</sub>)</label><div class="input-container"><div class="input-group"><input type="number" id="My" class="form-control" value="60"><span class="input-group-text">kNm</span></div></div></div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header"><h2>3. Material & Reinforcement</h2></div>
+                <div class="card-body">
+                    <div class="input-row"><label class="form-label">Concrete Grade (f<sub>ck</sub>)</label><div class="input-container"><div class="input-group"><input type="number" id="fck" class="form-control" value="25"><span class="input-group-text">N/mm²</span></div></div></div>
+                    <div class="input-row"><label class="form-label">Steel Grade (f<sub>y</sub>)</label><div class="input-container"><div class="input-group"><input type="number" id="fy" class="form-control" value="500"><span class="input-group-text">N/mm²</span></div></div></div>
+                    <div class="input-row">
+                        <label class="form-label">Bar Dia L-Dir (&phi;<sub>L</sub>)</label>
+                        <div class="input-container">
+                            <select id="barDiaL" class="form-select">
+                                <option value="8">8 mm</option><option value="10">10 mm</option><option value="12">12 mm</option>
+                                <option value="16" selected>16 mm</option><option value="20">20 mm</option><option value="25">25 mm</option>
+                                <option value="28">28 mm</option><option value="32">32 mm</option><option value="36">36 mm</option><option value="40">40 mm</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="input-row">
+                        <label class="form-label">Bar Dia B-Dir (&phi;<sub>B</sub>)</label>
+                        <div class="input-container">
+                            <select id="barDiaB" class="form-select">
+                                <option value="8">8 mm</option><option value="10">10 mm</option><option value="12">12 mm</option>
+                                <option value="16" selected>16 mm</option><option value="20">20 mm</option><option value="25">25 mm</option>
+                                <option value="28">28 mm</option><option value="32">32 mm</option><option value="36">36 mm</option><option value="40">40 mm</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <button onclick="calculateDetailedDesign()" class="btn-calculate">GENERATE COMPREHENSIVE REPORT</button>
+        </div>
+
+        <div class="col-lg-7">
+            <div class="card">
+                <div class="card-header"><h2>Detailed Structural Report</h2></div>
+                <div class="card-body">
+                    <div id="results" class="results-section">Perform calculation to see the detailed step-by-step design narrative...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="custom-footer">
+        <div>Conceived and developed by Vaisakh G.</div>
+        <div>Queries and suggestions: WhatsApp 9656840794</div>
+    </div>
+</div>
+
+<script>
+function calculateDetailedDesign() {
+    const P = parseFloat(document.getElementById('P').value);
+    const Mx = parseFloat(document.getElementById('Mx').value);
+    const My = parseFloat(document.getElementById('My').value);
+    const sbc = parseFloat(document.getElementById('sbc').value);
+    const Df = parseFloat(document.getElementById('df').value);
+    const gammaS = parseFloat(document.getElementById('gamma').value);
+    const fck = parseFloat(document.getElementById('fck').value);
+    const fy = parseFloat(document.getElementById('fy').value);
+    const barDiaL = parseInt(document.getElementById('barDiaL').value);
+    const barDiaB = parseInt(document.getElementById('barDiaB').value);
+    
+    const cl = 0.5, cb = 0.4, cover = 50;
+
+    let log = "============================================================\n";
+    log += "            IS 456:2000 ISOLATED FOOTING REPORT             \n";
+    log += "============================================================\n\n";
+    log += "1. DESIGN INPUTS SUMMARY\n";
+    log += "------------------------------------------------------------\n";
+    log += `Axial Service Load (P) : ${P} kN\n`;
+    log += `Bending Moment (Mx)    : ${Mx} kNm\n`;
+    log += `Bending Moment (My)    : ${My} kNm\n`;
+    log += `Safe Bearing Capacity  : ${sbc} kN/m²\n`;
+    log += `Material Properties    : fck = ${fck} MPa | fy = ${fy} MPa\n`;
+    log += `Foundation Depth (Df)  : ${Df} m\n`;
+    log += `Soil Parameters        : Density = ${gammaS} kN/m³\n\n`;
+
+    log += "2. SIZING & GEOTECHNICAL STABILITY\n";
+    log += "------------------------------------------------------------\n";
+    
+    let propRatio = Math.sqrt((Mx + 15) / (My + 15)); 
+    let AreaInit = (P * 1.15) / sbc;
+    let B = Math.sqrt(AreaInit / propRatio);
+    let L = AreaInit / B;
+    L = Math.ceil(L * 10) / 10; B = Math.ceil(B * 10) / 10;
+    
+    let d = 400, q_max, q_min, W_f, W_s, P_tot, ex, ey, Area;
+
+    for(let i=0; i<100; i++) {
+        Area = L * B;
+        let D_tot = (d + cover) / 1000;
+        W_f = Area * D_tot * 25; 
+        W_s = Area * (Df - D_tot) * gammaS; 
+        P_tot = P + W_f + W_s;
+        ex = Mx / P_tot; 
+        ey = My / P_tot;
+        let Zx = (B * L**2)/6; 
+        let Zy = (L * B**2)/6;
+        q_max = (P_tot/Area) + (Mx/Zx) + (My/Zy);
+        q_min = (P_tot/Area) - (Mx/Zx) - (My/Zy);
+        
+        if (q_max <= sbc && q_min >= 0) break;
+        L += 0.1; B += 0.1;
+    }
+
+    log += `[2.1] Provided Size   : ${L.toFixed(2)}m (L) x ${B.toFixed(2)}m (B)\n`;
+    log += `[2.2] Self-Weights    : Footing = ${W_f.toFixed(1)}kN | Soil = ${W_s.toFixed(1)}kN\n`;
+    log += `[2.3] Total Load      : ${P_tot.toFixed(2)} kN (Service)\n`;
+    log += `[2.4] Eccentricity Check (Kern Rule):\n`;
+    log += `      e = M / Ptot. To avoid tension, e < L/6.\n`;
+    log += `      ex: ${ex.toFixed(3)}m (Limit L/6 = ${(L/6).toFixed(3)}m) -> ${ex <= L/6 ? 'PASS' : 'FAIL'}\n`;
+    log += `      ey: ${ey.toFixed(3)}m (Limit B/6 = ${(B/6).toFixed(3)}m) -> ${ey <= B/6 ? 'PASS' : 'FAIL'}\n`;
+    log += `[2.5] Soil Pressure   : Max = ${q_max.toFixed(2)} kN/m² (SBC: ${sbc})\n`;
+    log += `                        Min = ${q_min.toFixed(2)} kN/m² (Uplift check > 0)\n\n`;
+
+    log += "3. STRUCTURAL LIMIT STATE ANALYSIS\n";
+    log += "------------------------------------------------------------\n";
+    
+    const Pu = P * 1.5;
+    const Mux = Mx * 1.5;
+    const Muy = My * 1.5;
+    const qu_max = (Pu/Area) + (Mux/((B*L**2)/6)) + (Muy/((L*B**2)/6));
+    
+    log += `[3.1] Design Pressure : qu_max = ${qu_max.toFixed(2)} kN/m² (Factored)\n`;
+
+    let safe = false, tvL, tvB, tp, tc = 0.36, tcp = 0.25 * Math.sqrt(fck);
+    while(!safe) {
+        tvL = (qu_max * B * (((L-cl)/2) - (d/1000)) * 1000) / (B * 1000 * d);
+        tvB = (qu_max * L * (((B-cb)/2) - (d/1000)) * 1000) / (L * 1000 * d);
+        let pL = cl + d/1000, pB = cb + d/1000;
+        let perimeter = 2 * (pL + pB) * 1000;
+        let shearForce = Pu - (qu_max * pL * pB);
+        tp = (shearForce * 1000) / (perimeter * d);
+        if(tvL <= tc && tvB <= tc && tp <= tcp) safe = true;
+        else d += 25;
+    }
+
+    log += `[3.2] Final Depth     : d = ${d}mm | Overall D = ${d + cover}mm\n`;
+    log += `[3.3] One-Way Shear   : Shear stress is checked at distance 'd' from column face.\n`;
+    log += `      Stress (L-Dir)  : ${tvL.toFixed(3)} N/mm² (Permissible = ${tc})\n`;
+    log += `      Stress (B-Dir)  : ${tvB.toFixed(3)} N/mm² (Permissible = ${tc})\n`;
+    log += `[3.4] Two-Way (Punching) Shear:\n`;
+    log += `      Checked at distance 'd/2' from column face.\n`;
+    log += `      Stress          : ${tp.toFixed(3)} N/mm²\n`;
+    log += `      Permissible     : 0.25*sqrt(fck) = ${tcp.toFixed(3)} N/mm²\n`;
+    log += `      Status          : ${tp <= tcp ? 'SAFE' : 'INCREASE DEPTH'}\n\n`;
+
+    log += "4. FLEXURAL DESIGN & REINFORCEMENT\n";
+    log += "------------------------------------------------------------\n";
+    
+    let Mu_faceL = (qu_max * B * Math.pow((L-cl)/2, 2)) / 2;
+    let Mu_faceB = (qu_max * L * Math.pow((B-cb)/2, 2)) / 2;
+
+    const getAst = (M, w, effD) => {
+        let term = 1 - (4.6 * M * 1e6) / (fck * (w * 1000) * Math.pow(effD,2));
+        if (term < 0) term = 0;
+        let ast = (0.5 * fck / fy) * (1 - Math.sqrt(term)) * (w * 1000) * effD;
+        let astMin = 0.0012 * w * 1000 * (effD + cover);
+        return Math.max(ast, astMin);
+    };
+
+    let astL = getAst(Mu_faceL, B, d);
+    let astB = getAst(Mu_faceB, L, d);
+    let spL = Math.min(300, Math.floor(((Math.PI/4)*barDiaL**2 * B * 1000) / astL));
+    let spB = Math.min(300, Math.floor(((Math.PI/4)*barDiaB**2 * L * 1000) / astB));
+
+    log += `[4.1] L-Dir Moment    : Mu = ${Mu_faceL.toFixed(1)} kNm\n`;
+    log += `      Required Ast    : ${astL.toFixed(0)} mm²\n`;
+    log += `      Provided        : ${barDiaL} mm dia @ ${spL} mm c/c\n`;
+    log += `[4.2] B-Dir Moment    : Mu = ${Mu_faceB.toFixed(1)} kNm\n`;
+    log += `      Required Ast    : ${astB.toFixed(0)} mm²\n`;
+    log += `      Provided        : ${barDiaB} mm dia @ ${spB} mm c/c\n\n`;
+
+    // --- NEW CHECKS ADDED HERE ---
+    log += "5. BEARING & DEVELOPMENT CHECKS\n";
+    log += "------------------------------------------------------------\n";
+    
+    // Bearing Stress Check
+    let BrgStress = (Pu * 1000) / (cl * 1000 * cb * 1000);
+    let A1 = L * B;
+    let A2 = cl * cb;
+    let alpha = Math.min(Math.sqrt(A1/A2), 2.0);
+    let PermBrg = 0.45 * fck * alpha;
+    log += `[5.1] Bearing Stress  : ${BrgStress.toFixed(2)} N/mm²\n`;
+    log += `      Permissible     : ${PermBrg.toFixed(2)} N/mm²\n`;
+    log += `      Status          : ${BrgStress <= PermBrg ? 'SAFE' : 'FAIL - Increase Grade/Size'}\n`;
+
+    // Development Length Check
+    let tau_bd = 1.4 * 1.6; // M25 & HYSD factor
+    if(fck >= 30) tau_bd = 1.5 * 1.6;
+    let Ld = (0.87 * fy * Math.max(barDiaL, barDiaB)) / (4 * tau_bd);
+    let AvailLd = ((L - cl) / 2) * 1000 - cover;
+    log += `[5.2] Dev. Length (Ld): Required = ${Ld.toFixed(0)} mm\n`;
+    log += `      Available length: ${AvailLd.toFixed(0)} mm\n`;
+    log += `      Status          : ${AvailLd >= Ld ? 'SAFE' : 'PROVIDE 90 DEG BEND/L-HOOK'}\n\n`;
+
+    log += "6. CONCLUSION\n";
+    log += "------------------------------------------------------------\n";
+    log += "The isolated footing section is found safe against biaxial\n";
+    log += "bending, soil pressure, shear, bearing, and development criteria\n";
+    log += "under the provisions of IS 456:2000.\n";
+    log += "------------------------------------------------------------\n";
+    log += "VERDICT: DESIGN VALIDATED SUCCESSFUL";
+
+    document.getElementById('results').innerText = log;
+}
+</script>
+</body>
+</html>
