@@ -9,15 +9,16 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
     <style>
         .calculation-card { background: #f8fafc; border-left: 4px solid #1e1b4b; padding: 1.5rem; margin-bottom: 1.5rem; border-radius: 0.5rem; }
-        .math-text { font-family: 'Times New Roman', serif; font-style: italic; font-weight: 600; }
+        .math-text { font-family: 'Times New Roman', serif; font-style: italic; font-weight: 600; color: #1e1b4b; }
+        .limit-text { font-size: 0.75rem; color: #64748b; font-weight: 500; text-transform: uppercase; margin-top: 2px; }
     </style>
 </head>
 <body class="bg-slate-50 p-4 sm:p-8">
 
     <div class="max-w-3xl mx-auto bg-white shadow-xl rounded-2xl overflow-hidden border border-slate-200">
         <header class="bg-indigo-900 p-6 text-white text-center">
-            <h1 class="text-2xl font-bold uppercase tracking-tight">RC Beam Capacity Analysis</h1>
-            <p class="text-indigo-300 text-xs mt-1 uppercase tracking-widest">IS 456:2000 Compliance Audit</p>
+            <h1 class="text-xl font-bold uppercase tracking-tight">Reinforced Concrete Beam Capacity Analysis</h1>
+            <p class="text-indigo-300 text-sm mt-1 font-medium">Based on Limit State Method (IS 456:2000)</p>
         </header>
 
         <main class="p-6 space-y-8">
@@ -28,6 +29,7 @@
                     <div><label class="block text-[10px] font-bold text-slate-500 uppercase">f<sub>y</sub> (MPa)</label><input type="number" id="fy" value="415" class="w-full p-3 bg-slate-50 border rounded-xl font-bold"></div>
                     <div><label class="block text-[10px] font-bold text-slate-500 uppercase">Width b (mm)</label><input type="number" id="b" value="300" class="w-full p-3 border rounded-xl font-bold"></div>
                     <div><label class="block text-[10px] font-bold text-slate-500 uppercase">Depth D (mm)</label><input type="number" id="D" value="450" class="w-full p-3 border rounded-xl font-bold"></div>
+                    <div><label class="block text-[10px] font-bold text-slate-500 uppercase">Clear Cover (mm)</label><input type="number" id="cc" value="25" class="w-full p-3 border rounded-xl font-bold"></div>
                 </div>
             </section>
 
@@ -61,10 +63,7 @@
 
             <div id="report-output" class="hidden space-y-6 pt-4">
                 <div id="verdict-card" class="p-6 rounded-2xl text-center font-black text-2xl border-4"></div>
-                
-                <div id="steps-container" class="space-y-4 text-sm text-slate-700">
-                    </div>
-
+                <div id="steps-container" class="space-y-4 text-sm text-slate-700"></div>
                 <button onclick="generatePDF()" class="w-full py-4 bg-red-600 text-white font-bold rounded-xl shadow-md uppercase text-xs hover:bg-red-700">Download Technical PDF Report</button>
             </div>
         </main>
@@ -87,6 +86,19 @@
             });
         });
 
+        function getTauC(pt, fck) {
+            const ptTable = [0.15, 0.25, 0.50, 0.75, 1.00, 1.25, 1.50, 1.75, 2.00, 2.25, 2.50, 2.75, 3.00];
+            const tcM25 = [0.29, 0.36, 0.49, 0.57, 0.64, 0.70, 0.74, 0.78, 0.82, 0.85, 0.88, 0.90, 0.92];
+            if (pt <= 0.15) return tcM25[0];
+            if (pt >= 3.00) return tcM25[tcM25.length - 1];
+            for (let i = 0; i < ptTable.length - 1; i++) {
+                if (pt >= ptTable[i] && pt <= ptTable[i+1]) {
+                    return tcM25[i] + (tcM25[i+1] - tcM25[i]) * (pt - ptTable[i]) / (ptTable[i+1] - ptTable[i]);
+                }
+            }
+            return 0.36;
+        }
+
         let res = {};
 
         function calculate() {
@@ -95,53 +107,81 @@
                 fck: v('fck'), fy: v('fy'), b: v('b'), D: v('D'),
                 nt: v('nt'), phit: v('phit'), nc: v('nc'), phic: v('phic'),
                 nlegs: v('nlegs'), phiv: v('phiv'), sv: v('sv'),
-                mu: v('mu'), vu: v('vu'), tu: v('tu'), cc: 25
+                mu: v('mu'), vu: v('vu'), tu: v('tu'), cc: v('cc')
             };
 
             const Ast = d.nt * Math.PI * Math.pow(d.phit, 2) / 4;
             const Asc = d.nc * Math.PI * Math.pow(d.phic, 2) / 4;
+            const Asv = d.nlegs * Math.PI * Math.pow(d.phiv, 2) / 4;
             const d_eff = d.D - d.cc - d.phiv - (d.phit/2);
             const d_prime = d.cc + d.phiv + (d.phic/2);
+            const pt = (Ast * 100) / (d.b * d_eff);
 
-            const Mt = (d.tu * (1 + (d.D / d.b))) / 1.7;
-            const Me1 = d.mu + Mt;
-            const xu_max = (d.fy === 415 ? 0.48 : 0.46) * d_eff;
-            const fsc = (d.fy === 415 ? 351.8 : 412.8);
-            let xu = (0.87 * d.fy * Ast - (fsc - 0.446 * d.fck) * Asc) / (0.36 * d.fck * d.b);
-            if (xu > xu_max) xu = xu_max;
-            const Mur = (0.36 * d.fck * d.b * xu * (d_eff - 0.42 * xu) + (fsc - 0.446 * d.fck) * Asc * (d_eff - d_prime)) / 1e6;
+            const fst_permissible = 0.87 * d.fy;
+            const fsc = (d.fy === 415 ? 351.8 : (d.fy === 500 ? 412.8 : fst_permissible));
+            const xu_max_factor = (d.fy === 415 ? 0.48 : (d.fy === 500 ? 0.46 : 0.53));
+            const xu_max = xu_max_factor * d_eff;
 
+            const Me1 = d.mu + ((d.tu * (1 + (d.D / d.b))) / 1.7);
             const Ve = d.vu + 1.6 * (d.tu / (d.b / 1000));
-            const tau_v = (Ve * 1000) / (d.b * d_eff);
-            const tau_c_max = (d.fck <= 20 ? 2.8 : (d.fck <= 25 ? 3.1 : 3.5));
 
-            res = { ...d, Ast, Asc, d_eff, d_prime, Mt, Me1, Ve, Mur, tau_v, tau_c_max, xu };
+            const tau_v = (Ve * 1000) / (d.b * d_eff);
+            const tau_c = getTauC(pt, d.fck);
+            const tau_c_max = (d.fck <= 25 ? 3.1 : 3.5);
+
+            const Vuc = (tau_c * d.b * d_eff) / 1000;
+            const Vus = (0.87 * d.fy * Asv * d_eff / d.sv) / 1000;
+            const Vtotal = Vuc + Vus;
+
+            let xu = (fst_permissible * Ast - (fsc - 0.446 * d.fck) * Asc) / (0.36 * d.fck * d.b);
+            const Mur = (0.36 * d.fck * d.b * xu * (d_eff - 0.42 * Math.min(xu, xu_max)) + (fsc - 0.446 * d.fck) * Asc * (d_eff - d_prime)) / 1e6;
+
+            const ast_min = (0.85 * d.b * d_eff) / d.fy;
+            const ast_max_limit = 0.04 * d.b * d.D;
+            const needs_sfr = d.D > 750;
+
+            res = { ...d, Ast, Asc, Asv, d_eff, d_prime, pt, fsc, fst_permissible, Me1, Ve, Mur, tau_v, tau_c, tau_c_max, Vuc, Vus, Vtotal, xu, xu_max, ast_min, ast_max_limit, needs_sfr };
 
             const report = document.getElementById('report-output');
             report.classList.remove('hidden');
-            const safe = (Mur >= Me1 && tau_v <= tau_c_max);
+            
+            const safe = (Mur >= Me1 && tau_v <= tau_c_max && Vtotal >= Ve && xu <= xu_max && Ast >= ast_min && Ast <= ast_max_limit && Asc <= ast_max_limit);
             const vBox = document.getElementById('verdict-card');
             vBox.innerText = safe ? "RESULT: SECTION IS SAFE" : "RESULT: SECTION IS UNSAFE";
             vBox.className = `p-6 rounded-2xl text-center font-black text-2xl border-4 ${safe ? 'bg-green-50 text-green-700 border-green-500' : 'bg-red-50 text-red-700 border-red-500'}`;
 
             document.getElementById('steps-container').innerHTML = `
                 <div class="calculation-card">
-                    <h3 class="font-bold text-indigo-900 border-b mb-3 text-[10px] uppercase">Step 1: Section Properties</h3>
-                    <p>Area of Tension Steel (A<sub>st</sub>): <b>${Ast.toFixed(2)} mm<sup>2</sup></b></p>
-                    <p>Area of Compression Steel (A<sub>sc</sub>): <b>${Asc.toFixed(2)} mm<sup>2</sup></b></p>
-                    <p>Effective Depth (d): <b>${d_eff.toFixed(1)} mm</b></p>
+                    <h3 class="font-bold text-indigo-900 border-b mb-3 text-[10px] uppercase tracking-wider">Step 1: Section Properties</h3>
+                    <p class="math-text">d = ${d_eff.toFixed(1)} mm | p<sub>t</sub> = ${pt.toFixed(3)} %</p>
+                </div>
+                <div class="calculation-card bg-indigo-50 border-indigo-500">
+                    <h3 class="font-bold text-indigo-900 border-b mb-3 text-[10px] uppercase tracking-wider">Step 2: Equivalent Design Forces</h3>
+                    <p class="math-text">M<sub>e1</sub> = ${Me1.toFixed(2)} kNm | V<sub>e</sub> = ${Ve.toFixed(2)} kN</p>
                 </div>
                 <div class="calculation-card">
-                    <h3 class="font-bold text-indigo-900 border-b mb-3 text-[10px] uppercase">Step 2: Equivalent Bending (Cl 41.4.2)</h3>
-                    <p class="math-text">M<sub>t</sub> = T<sub>u</sub> [1 + (D/b)] / 1.7 = ${Mt.toFixed(2)} kNm</p>
-                    <p class="math-text">M<sub>e1</sub> = M<sub>u</sub> + M<sub>t</sub> = ${Me1.toFixed(2)} kNm</p>
-                    <p>Flexural Capacity (M<sub>ur</sub>): <b>${Mur.toFixed(2)} kNm</b></p>
+                    <h3 class="font-bold text-indigo-900 border-b mb-3 text-[10px] uppercase tracking-wider">Step 3: Flexural Capacity & Stresses</h3>
+                    <p class="math-text">Moment Capacity (M<sub>ur</sub>) = ${Mur.toFixed(2)} kNm</p>
+                    <p class="math-text">Compression Stress (f<sub>sc</sub>) = ${fsc.toFixed(2)} MPa</p>
+                    <p class="math-text">Neutral Axis (x<sub>u</sub>) = ${xu.toFixed(2)} mm [Limit: ${xu_max.toFixed(2)}]</p>
                 </div>
                 <div class="calculation-card">
-                    <h3 class="font-bold text-indigo-900 border-b mb-3 text-[10px] uppercase">Step 3: Equivalent Shear (Cl 41.3.1)</h3>
-                    <p class="math-text">V<sub>e</sub> = V<sub>u</sub> + 1.6(T<sub>u</sub>/b) = ${Ve.toFixed(2)} kN</p>
-                    <p class="math-text">&tau;<sub>v</sub> = V<sub>e</sub> / (b &times; d) = ${tau_v.toFixed(3)} N/mm<sup>2</sup></p>
-                    <p>Stirrups: <b>${res.nlegs} Legged ${res.phiv} mm @ ${res.sv} mm c/c</b></p>
+                    <h3 class="font-bold text-indigo-900 border-b mb-3 text-[10px] uppercase tracking-wider">Step 4: Shear Analysis Verdict</h3>
+                    <p class="math-text">Nominal Shear (&tau;<sub>v</sub>): ${tau_v.toFixed(3)} MPa [Limit: ${tau_c_max.toFixed(2)}]</p>
+                    <div class="mt-4 grid grid-cols-2 gap-2 border-t pt-2">
+                        <p class="text-[10px] font-bold text-slate-500 uppercase">Concrete Resistance (V<sub>uc</sub>):</p>
+                        <p class="text-[10px] font-bold text-indigo-900 text-right">${Vuc.toFixed(2)} kN</p>
+                        <p class="text-[10px] font-bold text-slate-500 uppercase">Stirrup Resistance (V<sub>us</sub>):</p>
+                        <p class="text-[10px] font-bold text-indigo-900 text-right">${Vus.toFixed(2)} kN</p>
+                        <p class="text-[10px] font-bold text-indigo-800 border-t pt-1 uppercase">Total Capacity (V<sub>total</sub>):</p>
+                        <p class="text-[10px] font-bold text-indigo-800 border-t pt-1 text-right">${Vtotal.toFixed(2)} kN</p>
+                    </div>
+                </div>
+                <div class="calculation-card">
+                    <h3 class="font-bold text-indigo-900 border-b mb-3 text-[10px] uppercase tracking-wider">Step 5: IS 456 Compliance Audit</h3>
+                    <p class="math-text">Min Tension Required: ${ast_min.toFixed(1)} mm<sup>2</sup> [Provided: ${Ast.toFixed(1)}]</p>
+                    <p class="math-text">Max Steel Limit (Per Layer): ${ast_max_limit.toFixed(1)} mm<sup>2</sup></p>
+                    ${needs_sfr ? `<p class="mt-3 p-2 bg-amber-50 text-amber-700 text-[10px] font-bold rounded border border-amber-200 uppercase">Warning: Depth > 750mm. Provide Side Face Reinforcement (0.1% web area).</p>` : ''}
                 </div>
             `;
             vBox.scrollIntoView({ behavior: 'smooth' });
@@ -150,28 +190,45 @@
         function generatePDF() {
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF();
+            
+            // Header
             doc.setFont("helvetica", "bold");
-            doc.text("RC BEAM CAPACITY ANALYSIS", 105, 15, { align: "center" });
+            doc.setFontSize(14);
+            doc.text("Reinforced Concrete Beam Capacity Analysis", 105, 15, { align: "center" });
+            doc.setFontSize(10);
+            doc.setFont("helvetica", "normal");
+            doc.text("Based on Limit State Method (IS 456:2000)", 105, 22, { align: "center" });
 
-            doc.setFontSize(10); doc.text("SECTION A: DESIGN INPUTS", 14, 25);
+            // Design Inputs Table
+            doc.setFont("helvetica", "bold");
+            doc.text("SECTION A: DESIGN INPUTS", 14, 32);
             const inputData = [
                 ["Property", "Value", "Property", "Value"],
                 ["Concrete Grade", "M" + res.fck, "Steel Grade", "Fe" + res.fy],
                 ["Width (b)", res.b + " mm", "Depth (D)", res.D + " mm"],
+                ["Clear Cover", res.cc + " mm", "Effective Depth (d)", res.d_eff.toFixed(1) + " mm"],
                 ["Tension Bars", res.nt + " nos - " + res.phit + " mm", "Comp. Bars", res.nc + " nos - " + res.phic + " mm"],
                 ["Applied Mu", res.mu + " kNm", "Applied Tu", res.tu + " kNm"],
-                ["Applied Vu", res.vu + " kN", "Stirrup Details", res.nlegs + " Lg " + res.phiv + " mm @ " + res.sv + " mm"]
+                ["Applied Vu", res.vu + " kN", "Stirrups", res.nlegs + " Lg " + res.phiv + " mm @ " + res.sv + " mm"]
             ];
-            doc.autoTable({ startY: 28, body: inputData, theme: 'plain', styles: { fontSize: 8 } });
+            doc.autoTable({ startY: 35, body: inputData, theme: 'plain', styles: { fontSize: 8 } });
 
-            doc.text("SECTION B: MECHANICAL CALCULATIONS", 14, doc.lastAutoTable.finalY + 10);
+            // Detailed Mechanical Calculations Table
+            doc.setFont("helvetica", "bold");
+            doc.text("SECTION B: ANALYSIS & COMPLIANCE AUDIT", 14, doc.lastAutoTable.finalY + 10);
             const calcData = [
-                ["Analysis Property", "Applied Formula", "Result", "Verdict"],
-                ["Effective Depth", "D - cover - stirrup - bar/2", res.d_eff.toFixed(1) + " mm", "OK"],
-                ["Equiv. Moment (Me1)", "Mu + [Tu(1+D/b)/1.7]", res.Me1.toFixed(2) + " kNm", "-"],
-                ["Moment Capacity (Mur)", "IS 456 Annex G (Doubly)", res.Mur.toFixed(2) + " kNm", res.Mur >= res.Me1 ? "SAFE" : "FAIL"],
+                ["Analysis Property", "Formula / Limit", "Result", "Verdict"],
+                ["Equiv. Moment (Me1)", "Mu + Mt", res.Me1.toFixed(2) + " kNm", "-"],
+                ["Moment Capacity (Mur)", "Annex G (Doubly)", res.Mur.toFixed(2) + " kNm", res.Mur >= res.Me1 ? "SAFE" : "FAIL"],
                 ["Equiv. Shear (Ve)", "Vu + 1.6(Tu/b)", res.Ve.toFixed(2) + " kN", "-"],
-                ["Shear Stress (tv)", "Ve / (b x d)", res.tau_v.toFixed(3) + " N/mm2", res.tau_v <= res.tau_c_max ? "SAFE" : "FAIL"]
+                ["Nominal Shear (tv)", "<= tv,max (" + res.tau_c_max + ")", res.tau_v.toFixed(3) + " MPa", res.tau_v <= res.tau_c_max ? "OK" : "RESIZE"],
+                ["Design Shear (tc)", "IS 456 Table 19", res.tau_c.toFixed(3) + " MPa", "-"],
+                ["Force by Conc. (Vuc)", "tc * b * d", res.Vuc.toFixed(2) + " kN", "-"],
+                ["Force by Steel (Vus)", "0.87*fy*Asv*d/sv", res.Vus.toFixed(2) + " kN", "-"],
+                ["Total Shear Cap.", "Vuc + Vus", res.Vtotal.toFixed(2) + " kN", res.Vtotal >= res.Ve ? "SAFE" : "FAIL"],
+                ["Neutral Axis (xu)", "<= xu,max (" + res.xu_max.toFixed(2) + ")", res.xu.toFixed(2) + " mm", res.xu <= res.xu_max ? "OK" : "BRITTLE"],
+                ["Min Tension Steel", ">= 0.85bd/fy (" + res.ast_min.toFixed(1) + ")", res.Ast.toFixed(1) + " mm2", res.Ast >= res.ast_min ? "OK" : "FAIL"],
+                ["Max Steel (Layer)", "<= 0.04bD (" + res.ast_max_limit.toFixed(1) + ")", Math.max(res.Ast, res.Asc).toFixed(1) + " mm2", Math.max(res.Ast, res.Asc) <= res.ast_max_limit ? "OK" : "FAIL"]
             ];
 
             doc.autoTable({
@@ -179,12 +236,29 @@
                 head: [calcData[0]],
                 body: calcData.slice(1),
                 theme: 'grid',
-                headStyles: { fillColor: [30, 27, 75] }
+                headStyles: { fillColor: [30, 27, 75] },
+                styles: { fontSize: 8 }
             });
 
-            doc.setFontSize(8); doc.setTextColor(0, 0, 255);
-            doc.text("For more Civil Engineering tools, visit https://vaisakhpwd.github.io/calculators", 105, doc.lastAutoTable.finalY + 20, { align: "center" });
-            doc.save("RC_Beam_Capacity_Analysis.pdf");
+            // Final Verdict Box in PDF
+            const finalY = doc.lastAutoTable.finalY + 15;
+            const safe = (res.Mur >= res.Me1 && res.tau_v <= res.tau_c_max && res.Vtotal >= res.Ve && res.xu <= res.xu_max && res.Ast >= res.ast_min && res.Ast <= res.ast_max_limit);
+            
+            doc.setDrawColor(safe ? 0 : 200, safe ? 128 : 0, 0);
+            doc.setFillColor(safe ? 240 : 255, safe ? 255 : 240, safe ? 240 : 240);
+            doc.rect(14, finalY, 182, 15, 'FD');
+            doc.setTextColor(safe ? 0 : 150, safe ? 100 : 0, 0);
+            doc.setFontSize(12);
+            doc.text(safe ? "FINAL VERDICT: SECTION IS STRUCTURALLY SAFE" : "FINAL VERDICT: SECTION IS STRUCTURALLY UNSAFE", 105, finalY + 10, { align: "center" });
+
+            // Footer
+            const pageHeight = doc.internal.pageSize.height;
+            doc.setFontSize(8); doc.setTextColor(100, 100, 100);
+            doc.text("Conceived and developed by Vaisakh G. | WhatsApp: 9656840794", 105, pageHeight - 15, { align: "center" });
+            doc.setTextColor(0, 0, 255);
+            doc.text("For more technical tools, visit https://vaisakhpwd.github.io/calculators", 105, pageHeight - 10, { align: "center" });
+            
+            doc.save("Beam_Analysis_Technical_Report.pdf");
         }
     </script>
 </body>
