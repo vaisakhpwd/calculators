@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GSB & WMM Sieve Analysis Calculator</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+
+    <style>
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-900 font-sans">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useMemo } = React;
+        const { jsPDF } = window.jspdf;
+
+        const formatDateDDMMYYYY = (isoDate) => {
+            if (!isoDate) return '-';
+            const parts = isoDate.split('-');
+            return parts.length === 3 ? `${parts[2]}-${parts[1]}-${parts[0]}` : isoDate;
+        };
+
+        // --- ICONS ---
+        const AlertCircle = ({ className }) => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>);
+        const CheckCircle = ({ className }) => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>);
+        const RefreshCw = ({ className }) => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>);
+        const Calculator = ({ className }) => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><rect x="4" y="2" width="16" height="20" rx="2"></rect><line x1="8" y1="6" x2="16" y2="6"></line><line x1="16" y1="14" x2="16" y2="14"></line><line x1="12" y1="14" x2="12" y2="14"></line><line x1="8" y1="14" x2="8" y2="14"></line><line x1="16" y1="18" x2="16" y2="18"></line><line x1="12" y1="18" x2="12" y2="18"></line><line x1="8" y1="18" x2="8" y2="18"></line></svg>);
+        const DownloadIcon = ({ className }) => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>);
+
+        // --- CONSTANTS & SPECS ---
+        const SIEVES = [
+            { id: 75, label: '75 mm' }, { id: 53, label: '53 mm' }, { id: 45, label: '45 mm' },
+            { id: 26.5, label: '26.5 mm' }, { id: 22.4, label: '22.4 mm' }, { id: 11.2, label: '11.2 mm' },
+            { id: 9.5, label: '9.5 mm' }, { id: 4.75, label: '4.75 mm' }, { id: 2.36, label: '2.36 mm' },
+            { id: 0.6, label: '600 micron' }, { id: 0.425, label: '425 micron' }, { id: 0.075, label: '75 micron' }
+        ];
+
+        // Minimum Sample Weight (MoRTH/IS 2386)
+        const MIN_SAMPLE_WEIGHTS = { 75: 100000, 53: 50000, 45: 50000, 26.5: 25000, 22.4: 25000 };
+
+        const SPECS = {
+            'wmm': {
+                name: 'Wet Mix Macadam (WMM)',
+                group: 'Base Course',
+                ref: 'MoRTH Table 400-13',
+                sieves: [53, 45, 22.4, 11.2, 4.75, 2.36, 0.6, 0.075],
+                limits: { 53: [100, 100], 45: [95, 100], 22.4: [60, 80], 11.2: [40, 60], 4.75: [25, 40], 2.36: [15, 30], 0.6: [8, 22], 0.075: [0, 5] }
+            },
+            'gsb_1': {
+                name: 'GSB Grading I (Close-Graded)',
+                group: 'Sub-Base',
+                ref: 'MoRTH Table 400-1',
+                sieves: [75, 53, 26.5, 9.5, 4.75, 2.36, 0.425, 0.075],
+                limits: { 75: [100, 100], 53: [80, 100], 26.5: [55, 90], 9.5: [35, 65], 4.75: [25, 55], 2.36: [20, 40], 0.425: [10, 23], 0.075: [3, 10] }
+            },
+            'gsb_2': {
+                name: 'GSB Grading II (Close-Graded)',
+                group: 'Sub-Base',
+                ref: 'MoRTH Table 400-1',
+                sieves: [53, 26.5, 9.5, 4.75, 2.36, 0.425, 0.075],
+                limits: { 53: [100, 100], 26.5: [70, 100], 9.5: [50, 80], 4.75: [40, 65], 2.36: [30, 50], 0.425: [15, 25], 0.075: [3, 10] }
+            },
+	   'gsb_3': {
+                name: 'GSB Grading III (Close-Graded)',
+                ref: 'MoRTH Table 400-1',
+                sieves: [75, 26.5, 4.75, 0.075],
+                limits: { 75: [100, 100], 26.5: [55, 75], 4.75: [10, 30], 0.075: [0, 10] }
+            },
+            'gsb_4': {
+                name: 'GSB Grading IV (Close-Graded)',
+                ref: 'MoRTH Table 400-1',
+                sieves: [53, 26.5, 4.75, 0.075],
+                limits: { 53: [100, 100], 26.5: [50, 80], 4.75: [15, 35], 0.075: [0, 10] }
+            },
+            'gsb_5': {
+                name: 'GSB Grading V (Coarse-Graded)',
+                group: 'Sub-Base',
+                ref: 'MoRTH Table 400-2',
+                sieves: [75, 53, 26.5, 9.5, 4.75, 2.36, 0.075],
+                limits: { 75: [100, 100], 53: [80, 100], 26.5: [55, 90], 9.5: [35, 65], 4.75: [25, 50], 2.36: [10, 20], 0.075: [0, 5] }
+            },
+	    'gsb_6': {
+                name: 'GSB Grading VI (Coarse-Graded)',
+                ref: 'MoRTH Table 400-2',
+                sieves: [53, 26.5, 9.5, 4.75, 2.36, 0.075],
+                limits: { 53: [100, 100], 26.5: [75, 100], 9.5: [55, 75], 4.75: [30, 55], 2.36: [10, 25], 0.075: [0, 8] }
+            }
+        };
+
+        function GSBWMMApp() {
+            const [specKey, setSpecKey] = useState('wmm'); 
+            const [weights, setWeights] = useState({});
+            const [panWeight, setPanWeight] = useState(0);
+            const [projectDetails, setProjectDetails] = useState({ projectName: '', description: '', testDate: new Date().toISOString().split('T')[0] });
+
+            const currentSpec = SPECS[specKey];
+            const sievesToShow = currentSpec.sieves.map(sId => SIEVES.find(s => s.id === sId));
+
+            const calculationResults = useMemo(() => {
+                let totalWeight = parseFloat(panWeight) || 0;
+                sievesToShow.forEach(sieve => totalWeight += (parseFloat(weights[sieve.id]) || 0));
+
+                let runningCumulativeRetained = 0;
+                const rows = sievesToShow.map(sieve => {
+                    const retained = parseFloat(weights[sieve.id]) || 0;
+                    const percentRetained = totalWeight > 0 ? (retained / totalWeight) * 100 : 0;
+                    runningCumulativeRetained += percentRetained;
+                    const percentFiner = 100 - runningCumulativeRetained;
+                    const limit = currentSpec.limits[sieve.id];
+                    let status = limit ? (percentFiner >= limit[0] - 0.01 && percentFiner <= limit[1] + 0.01) : null;
+
+                    return { sieve, retained, percentRetained, cumulativeRetained: runningCumulativeRetained, percentFiner: Math.max(0, percentFiner), limitString: limit ? `${limit[0]}-${limit[1]}` : "-", status };
+                });
+
+                const minReq = MIN_SAMPLE_WEIGHTS[sievesToShow[0].id] || 25000;
+                return { totalWeight, rows, minReq, isSufficient: totalWeight >= minReq };
+            }, [weights, panWeight, currentSpec]);
+
+            const generatePDF = () => {
+                const doc = new jsPDF();
+                doc.setFontSize(16).text('GSB / WMM Gradation Report', 105, 15, { align: 'center' });
+                doc.setFontSize(10).setTextColor(100).text(`Reference: ${currentSpec.ref}`, 105, 22, { align: 'center' });
+                
+                doc.setTextColor(0).setFont("helvetica", "bold").text("Project Details:", 14, 35);
+                doc.setFont("helvetica", "normal").text(`Project: ${projectDetails.projectName || '-'}`, 14, 42);
+                doc.text(`Date: ${formatDateDDMMYYYY(projectDetails.testDate)}`, 14, 47);
+                doc.text(`Material: ${currentSpec.name}`, 14, 52);
+
+                const tableData = calculationResults.rows.map(r => [r.sieve.label, weights[r.sieve.id] || 0, r.percentRetained.toFixed(2), r.cumulativeRetained.toFixed(2), r.percentFiner.toFixed(2), r.limitString, r.status === false ? 'FAIL' : 'PASS']);
+                tableData.push(['Pan', panWeight || 0, '-', '-', '-', '-', '-'], ['Total', calculationResults.totalWeight.toFixed(1), '-', '-', '100%', '-', '-']);
+
+                doc.autoTable({
+                    startY: 60,
+                    head: [['IS Sieve', 'Wt. Ret (g)', '% Retained', 'Cum. % Ret', '% Passing', 'MoRTH Limits', 'Status']],
+                    body: tableData,
+                    theme: 'grid',
+                    headStyles: { fillColor: [30, 58, 138] },
+                    didParseCell: (data) => { if (data.cell.raw === 'FAIL') data.cell.styles.textColor = [220, 38, 38]; }
+                });
+
+                doc.save(`${projectDetails.projectName || 'gradation'}_report.pdf`);
+            };
+
+            return (
+                <div className="min-h-screen pb-20">
+                    <header className="bg-blue-900 text-white p-4 shadow-lg sticky top-0 z-10 flex justify-between items-center">
+                        <div className="flex items-center gap-2">
+                            <Calculator className="w-6 h-6" />
+                            <h1 className="text-xl font-bold">GSB & WMM Calculator</h1>
+                        </div>
+                        <button onClick={generatePDF} className="bg-white text-blue-900 px-4 py-2 rounded font-bold text-sm flex items-center gap-2">
+                            <DownloadIcon className="w-4 h-4" /> Download PDF
+                        </button>
+                    </header>
+
+                    <main className="max-w-4xl mx-auto p-4 space-y-6">
+                        <section className="bg-white rounded-xl shadow-sm border p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="md:col-span-2"><h2 className="text-lg font-bold border-b pb-2 mb-2">Project Information</h2></div>
+                            <input type="text" placeholder="Project Name" className="p-2 border rounded" value={projectDetails.projectName} onChange={e => setProjectDetails({...projectDetails, projectName: e.target.value})} />
+                            <input type="date" className="p-2 border rounded" value={projectDetails.testDate} onChange={e => setProjectDetails({...projectDetails, testDate: e.target.value})} />
+                            <select className="p-2 border rounded font-bold text-blue-800" value={specKey} onChange={e => setSpecKey(e.target.value)}>
+                                {Object.entries(SPECS).map(([k, v]) => <option key={k} value={k}>{v.name}</option>)}
+                            </select>
+                            <div className={`p-2 rounded text-xs font-bold ${calculationResults.isSufficient ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                                Sample Wt: {(calculationResults.totalWeight/1000).toFixed(2)}kg (Req: {calculationResults.minReq/1000}kg)
+                            </div>
+                        </section>
+
+                        <section className="bg-white rounded-xl shadow-sm border overflow-hidden">
+                            <table className="w-full text-sm text-left">
+                                <thead className="bg-slate-100 text-slate-600 uppercase text-xs">
+                                    <tr>
+                                        <th className="p-3">Sieve Size</th>
+                                        <th className="p-3">Wt. Retained (g)</th>
+                                        <th className="p-3 text-right">% Passing</th>
+                                        <th className="p-3 text-center">MoRTH Limit</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y">
+                                    {calculationResults.rows.map(row => (
+                                        <tr key={row.sieve.id} className="hover:bg-slate-50">
+                                            <td className="p-3 font-medium">{row.sieve.label}</td>
+                                            <td className="p-2">
+                                                <input type="number" className="w-full p-1 border rounded" value={weights[row.sieve.id] || ''} onChange={e => setWeights({...weights, [row.sieve.id]: e.target.value})} />
+                                            </td>
+                                            <td className={`p-3 text-right font-bold ${row.status === false ? 'text-red-600' : 'text-blue-700'}`}>{row.percentFiner.toFixed(2)}%</td>
+                                            <td className="p-3 text-center text-slate-500 text-xs">{row.limitString}</td>
+                                        </tr>
+                                    ))}
+                                    <tr className="bg-slate-50">
+                                        <td className="p-3 font-bold">Pan</td>
+                                        <td className="p-2"><input type="number" className="w-full p-1 border rounded" value={panWeight || ''} onChange={e => setPanWeight(e.target.value)} /></td>
+                                        <td colSpan="2"></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </section>
+
+                        <div className="bg-blue-800 text-white p-6 rounded-xl shadow-lg flex justify-between items-center">
+                            <div>
+                                <p className="text-blue-200 text-sm uppercase tracking-widest">Gradation Status</p>
+                                <h3 className="text-2xl font-bold">
+                                    {calculationResults.rows.some(r => r.status === false) ? "OUTSIDE LIMITS ❌" : "CONFORMS ✅"}
+                                </h3>
+                            </div>
+                            <button onClick={() => {setWeights({}); setPanWeight(0);}} className="bg-blue-700 p-2 rounded hover:bg-red-600 transition-colors"><RefreshCw className="w-5 h-5" /></button>
+                        </div>
+
+                        <footer className="mt-8 text-center text-slate-400 text-xs space-y-1">
+                            <p>Adapted for MoRTH GSB/WMM Standards.</p>
+                            <p>Based on original tool by Vaisakh G.</p>
+                        </footer>
+                    </main>
+                </div>
+            );
+        }
+
+        ReactDOM.createRoot(document.getElementById('root')).render(<GSBWMMApp />);
+    </script>
+</body>
+</html>
