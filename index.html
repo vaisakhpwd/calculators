@@ -4,9 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Vaisakh's Engineering Calculators</title>
-    <!-- Load Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Load Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         /* Custom styles for a better visual experience */
@@ -28,7 +26,6 @@
 
     <div class="max-w-4xl mx-auto">
         
-        <!-- Header Section -->
         <header class="text-center py-10 mb-8 border-b-2 border-indigo-200">
             <h1 class="text-5xl font-extrabold text-indigo-700 tracking-tight mb-2">
                 Engineering Utility Hub
@@ -38,75 +35,38 @@
             </p>
         </header>
 
-        <!-- Calculators Grid -->
         <main class="grid grid-cols-1 md:grid-cols-3 gap-8">
 
-           <!-- Calculator Card 1: Levelling Survey Calculator -->
-            <a href="./Levelling calculator V 3.html" class="calculator-card block p-6 bg-white rounded-xl shadow-lg hover:shadow-xl border border-indigo-100">
-    <div class="flex items-center space-x-4">
-        <div class="flex-shrink-0 w-16 h-16 bg-indigo-500 rounded-full flex items-center justify-center overflow-hidden">
-            <img src="./LevellingIcon.png" 
-                 alt="LST" 
-                 class="w-12 h-12 object-contain">
-        </div>
-        <div>
-            <h2 class="text-xl font-semibold text-gray-900 mb-1">Levelling Survey</h2>
-            <p class="text-sm text-gray-500">
-                Calculate Reduced Levels (RL) using Height of Collimation method and prepare Level Field Book.
-            </p>
-        </div>
-    </div>
-    <div class="mt-4 text-indigo-600 font-medium flex items-center">
-        Launch Tool
-        <i data-lucide="arrow-right" class="w-4 h-4 ml-2"></i>
-    </div>
-</a>
-
-            <!-- Calculator Card 2: Compressive Strength Calculator -->
-            <a href="./Compressive Strength Calculator V 3.3.html" class="calculator-card block p-6 bg-white rounded-xl shadow-lg hover:shadow-xl border border-indigo-100">
-                <div class="flex items-center space-x-4">
-                    <div class="flex-shrink-0 w-16 h-16 bg-indigo-500 rounded-full flex items-center justify-center overflow-hidden">
-            <img src="./CompStrengthLogo.png" 
-                 alt="fsc" 
-                 class="w-12 h-12 object-contain">
-        </div>
-                    <div>
-                        <h2 class="text-xl font-semibold text-gray-900 mb-1">Compressive Strength Calculator</h2>
-                        <p class="text-sm text-gray-500">
-                            Determine the strength of concrete as per IS, IRC and Kerala PWD Circular.
-                        </p>
-                    </div>
+           <a href="./Levelling calculator V 3.html" class="calculator-card block p-6 bg-white rounded-xl shadow-lg border border-indigo-100">
+                <div class="flex items-center space-x-3 mb-3">
+                    <img src="./LevellingIcon.png" alt="LST" class="w-10 h-10 object-contain">
+                    <h2 class="text-xl font-semibold text-gray-900">Levelling Survey</h2>
                 </div>
-                <div class="mt-4 text-indigo-600 font-medium flex items-center">
-                    Launch Tool
-                    <i data-lucide="arrow-right" class="w-4 h-4 ml-2"></i>
-                </div>
+                <p class="text-sm text-gray-500 w-full">
+                    Calculate Reduced Levels (RL) using Height of Collimation method and prepare Level Field Book.
+                </p>
             </a>
 
-            <!-- Calculator Card 3: Sieve Analysis Calculator -->
-            <a href="./Sieve Analysis calculator V 1.html" class="calculator-card block p-6 bg-white rounded-xl shadow-lg hover:shadow-xl border border-indigo-100">
-                <div class="flex items-center space-x-4">
-                    <div class="flex-shrink-0 w-16 h-16 bg-indigo-500 rounded-full flex items-center justify-center overflow-hidden">
-            <img src="./SieveAnalysisLogo.png" 
-                 alt="SA" 
-                 class="w-12 h-12 object-contain">
-        </div>
-                    <div>
-                        <h2 class="text-xl font-semibold text-gray-900 mb-1">Sieve Analysis</h2>
-                        <p class="text-sm text-gray-500">
-                            Analyze particle size distribution and calculate fineness modulus of aggregates.
-                        </p>
-                    </div>
+            <a href="./Compressive Strength Calculator V 3.3.html" class="calculator-card block p-6 bg-white rounded-xl shadow-lg border border-indigo-100">
+                <div class="flex items-center space-x-3 mb-3">
+                    <img src="./CompStrengthLogo.png" alt="fsc" class="w-10 h-10 object-contain">
+                    <h2 class="text-xl font-semibold text-gray-900">Compressive Strength</h2>
                 </div>
-                <div class="mt-4 text-indigo-600 font-medium flex items-center">
-                    Launch Tool
-                    <i data-lucide="arrow-right" class="w-4 h-4 ml-2"></i>
-                </div>
+                <p class="text-sm text-gray-500 w-full">
+                    Determine the strength of concrete as per IS, IRC and Kerala PWD Circular.
+                </p>
             </a>
 
-            
+            <a href="./Sieve Analysis calculator V 1.html" class="calculator-card block p-6 bg-white rounded-xl shadow-lg border border-indigo-100">
+                <div class="flex items-center space-x-3 mb-3">
+                    <img src="./SieveAnalysisLogo.png" alt="SA" class="w-10 h-10 object-contain">
+                    <h2 class="text-xl font-semibold text-gray-900">Sieve Analysis</h2>
+                </div>
+                <p class="text-sm text-gray-500 w-full">
+                    Analyze particle size distribution and calculate fineness modulus of aggregates.
+                </p>
+            </a>
 
-            <!-- Calculator Card 4: Mix design Calculator -->            
             <a href="./Concrete Mix Design.html" class="calculator-card block p-6 bg-white rounded-xl shadow-lg hover:shadow-xl border border-indigo-100">
                 <div class="flex items-center space-x-4">
                     <div class="p-3 bg-indigo-500 rounded-full text-white">
@@ -125,8 +85,6 @@
                 </div>
             </a>
 
-            
-            <!-- Calculator Card 5: Prestressing Report Generator-->            
             <a href="./Prestressing.html" class="calculator-card block p-6 bg-white rounded-xl shadow-lg hover:shadow-xl border border-indigo-100">
                 <div class="flex items-center space-x-4">
                     <div class="p-3 bg-indigo-500 rounded-full text-white">
@@ -145,7 +103,6 @@
                 </div>
             </a>
 
-            <!-- Calculator Card 6: Beam Analysis-->            
             <a href="./BeamAnalysisV0.html" class="calculator-card block p-6 bg-white rounded-xl shadow-lg hover:shadow-xl border border-indigo-100">
                 <div class="flex items-center space-x-4">
                     <div class="p-3 bg-indigo-500 rounded-full text-white">
@@ -164,11 +121,9 @@
                 </div>
             </a>
 
-            <!-- Calculator Card 7: Isolated Footing Design -->
             <a href="./Isolated Footing Design.html" class="calculator-card block p-6 bg-white rounded-xl shadow-lg hover:shadow-xl border border-indigo-100">
                 <div class="flex items-center space-x-4">
                     <div class="p-3 bg-indigo-500 rounded-full text-white">
-                        <!-- Icon: Brick Wall for Material Strength -->
                         <i data-lucide="file-text" class="w-6 h-6"></i>
                     </div>
                     <div>
@@ -185,11 +140,9 @@
             </a>
 
 
-            <!-- Calculator Card 8: GSB WMM Sieve Analysis -->
             <a href="./GSB WMM.html" class="calculator-card block p-6 bg-white rounded-xl shadow-lg hover:shadow-xl border border-indigo-100">
                 <div class="flex items-center space-x-4">
                     <div class="p-3 bg-indigo-500 rounded-full text-white">
-                        <!-- Icon: Target for Surveying/Aiming -->
                         <i data-lucide="target" class="w-6 h-6"></i>
                     </div>
                     <div>
@@ -207,7 +160,6 @@
             
         </main>
 
-    <!-- Footer -->
     <footer class="mt-8 pb-4 text-center text-sm text-red-600">
         <p>Conceived and developed by Vaisakh G.</p>
         <p>Queries and suggestions: WhatsApp 9656840794</p>
@@ -215,9 +167,7 @@
 
     </div>
 
-    <!-- Script to initialize Lucide icons -->
     <script>
-        // Calls the Lucide library to render all icons specified with data-lucide attribute
         lucide.createIcons();
     </script>
 
