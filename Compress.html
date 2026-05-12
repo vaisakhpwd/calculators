@@ -1,0 +1,159 @@
+/<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynamic Image Optimizer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen flex flex-col items-center p-8">
+
+    <div class="max-w-3xl w-full bg-gray-800 p-8 rounded-2xl shadow-2xl border border-gray-700">
+        <header class="text-center mb-8 border-b border-gray-700 pb-6">
+            <h1 class="text-3xl font-bold text-blue-400">Dynamic Optimizer</h1>
+            <p class="text-gray-400 mt-2">Adjust slider to compress in real-time</p>
+        </header>
+
+        <div class="bg-gray-900/50 p-6 rounded-xl border border-gray-700 mb-8">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8 items-end">
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-3">Export Format</label>
+                    <select id="format" class="w-full bg-gray-800 border border-gray-600 rounded p-3 focus:ring-2 focus:ring-blue-500">
+                        <option value="image/webp">WebP (Recommended)</option>
+                        <option value="image/png">PNG (Scale-based)</option>
+                        <option value="image/jpeg">JPEG</option>
+                    </select>
+                </div>
+                <div>
+                    <div class="flex justify-between mb-3">
+                        <label id="sliderLabel" class="text-xs font-bold uppercase tracking-wider text-blue-400">Quality: 80%</label>
+                    </div>
+                    <input type="range" id="manualSlider" min="5" max="100" value="80" class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500">
+                </div>
+            </div>
+        </div>
+
+        <div id="6zone" class="border-2 border-dashed border-gray-600 rounded-xl p-10 text-center hover:border-blue-500 hover:bg-gray-700/30 transition-all cursor-pointer mb-8 group">
+            <input type="file" id="fileInput" multiple accept="image/*" class="hidden">
+            <div class="text-4xl mb-2 group-hover:scale-110 transition-transform">🖼️</div>
+            <p class="text-lg font-semibold">Drop your images here</p>
+            <p class="text-xs text-gray-500 mt-2 italic">Images are processed locally in your browser</p>
+        </div>
+
+        <div id="results" class="space-y-4"></div>
+<footer class="mt-8 pb-4 text-center text-sm text-red-600">
+        <p>Conceived and developed by Vaisakh G.</p>
+        <p>Queries and suggestions: WhatsApp 9656840794</p>
+    </footer>
+    </div>
+
+    <script>
+        const fileInput = document.getElementById('fileInput');
+        const dropzone = document.getElementById('dropzone');
+        const manualSlider = document.getElementById('manualSlider');
+        const sliderLabel = document.getElementById('sliderLabel');
+        const formatSelect = document.getElementById('format');
+        const resultsContainer = document.getElementById('results');
+
+        let activeImages = []; // Stores { img, name, originalSize, id }
+
+        // Trigger compression when settings change
+        manualSlider.oninput = () => {
+            updateSliderLabel();
+            compressAll();
+        };
+
+        formatSelect.onchange = () => {
+            updateSliderLabel();
+            compressAll();
+        };
+
+        function updateSliderLabel() {
+            const val = manualSlider.value;
+            sliderLabel.innerText = (formatSelect.value === 'image/png') ? `Dimensions: ${val}%` : `Quality: ${val}%`;
+        }
+
+        dropzone.onclick = () => fileInput.click();
+        fileInput.onchange = (e) => handleFiles(e.target.files);
+
+        // Drag & Drop Handling
+        dropzone.ondragover = (e) => { e.preventDefault(); dropzone.classList.add('border-blue-400'); };
+        dropzone.ondragleave = () => dropzone.classList.remove('border-blue-400');
+        dropzone.ondrop = (e) => { e.preventDefault(); dropzone.classList.remove('border-blue-400'); handleFiles(e.dataTransfer.files); };
+
+        async function handleFiles(files) {
+            for (const file of files) {
+                const img = await loadImage(file);
+                const id = 'img-' + Math.random().toString(36).substr(2, 9);
+                activeImages.push({ img, name: file.name, originalSize: file.size, id });
+                
+                // Create UI element for this file
+                const div = document.createElement('div');
+                div.id = id;
+                div.className = "bg-gray-700/50 border border-gray-600 p-4 rounded-lg flex items-center justify-between transition-all";
+                resultsContainer.prepend(div);
+            }
+            compressAll();
+        }
+
+        function loadImage(file) {
+            return new Promise(resolve => {
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = e => {
+                    const img = new Image();
+                    img.src = e.target.result;
+                    img.onload = () => resolve(img);
+                };
+            });
+        }
+
+        async function compressAll() {
+            for (const item of activeImages) {
+                const format = formatSelect.value;
+                const val = manualSlider.value / 100;
+                
+                let quality = (format === "image/png") ? 1.0 : val;
+                let scale = (format === "image/png") ? val : 1.0;
+
+                const blob = await getBlob(item.img, format, quality, scale);
+                updateUI(item, blob);
+            }
+        }
+
+        function getBlob(img, format, quality, scale) {
+            return new Promise(resolve => {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                canvas.width = img.width * scale;
+                canvas.height = img.height * scale;
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                canvas.toBlob(blob => resolve(blob), format, quality);
+            });
+        }
+
+        function updateUI(item, blob) {
+            const container = document.getElementById(item.id);
+            if (!container) return;
+
+            const url = URL.createObjectURL(blob);
+            const kbSize = (blob.size / 1024).toFixed(1);
+            const isOptimized = blob.size < 250000;
+
+            container.innerHTML = `
+                <div class="flex-1 min-w-0 pr-4">
+                    <p class="text-sm font-bold truncate text-blue-100">${item.name}</p>
+                    <p class="text-xs ${isOptimized ? 'text-green-400' : 'text-yellow-500'} transition-colors">
+                        ${(item.originalSize/1024).toFixed(1)}KB → <b>${kbSize}KB</b>
+                    </p>
+                </div>
+                <div class="flex items-center gap-3">
+                    <a href="${url}" download="opt_${item.name}" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded text-[10px] font-black uppercase tracking-widest transition-all shadow-lg active:scale-95">
+                        Download
+                    </a>
+                </div>
+            `;
+        }
+    </script>
+</body>
+</html>
