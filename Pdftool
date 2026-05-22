@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>PDF Engineering Toolkit</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+</head>
+<body class="bg-zinc-950 text-zinc-100 min-h-screen p-4 flex flex-col items-center font-sans pb-20">
+
+    <div class="max-w-2xl w-full space-y-6">
+        <header class="text-center py-6">
+            <h1 class="text-3xl font-black text-orange-500 tracking-tighter italic uppercase">PDF Toolkit</h1>
+            <p id="status" class="text-[10px] text-zinc-500 font-mono uppercase tracking-[0.2em] mt-2 h-4">Ready for processing</p>
+        </header>
+
+        <section class="bg-zinc-900 p-6 rounded-3xl border border-zinc-800 shadow-xl">
+            <h2 class="text-[11px] font-black text-orange-400 uppercase mb-4 tracking-widest flex items-center gap-2">
+                <span class="w-2 h-2 bg-orange-500 rounded-full"></span> Merge & Insert
+            </h2>
+            <div class="space-y-4">
+                <div>
+                    <label class="text-[9px] text-zinc-500 uppercase font-bold ml-1">Primary/Base PDF</label>
+                    <input type="file" id="mergeInput" multiple accept="application/pdf" class="block w-full text-xs text-zinc-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-zinc-800 file:text-zinc-300">
+                </div>
+                <div class="grid grid-cols-2 gap-4 pt-2">
+                    <button onclick="mergePDFs()" class="bg-orange-600 text-white font-black py-3 rounded-xl text-[10px] uppercase tracking-widest active:scale-95 transition-all">Merge All</button>
+                    <div class="flex items-center gap-2 bg-zinc-800 rounded-xl px-3 border border-zinc-700">
+                        <span class="text-[9px] text-zinc-500 uppercase font-bold leading-none">At Page:</span>
+                        <input type="number" id="insertIdx" value="0" class="bg-transparent text-orange-400 font-bold text-xs w-full focus:outline-none">
+                    </div>
+                </div>
+                <p class="text-[8px] text-zinc-600 italic leading-tight">* To "Merge", just select multiple files and click Merge. To "Insert", select the Base PDF first, then the file to add, and set the page index.</p>
+            </div>
+        </section>
+
+        <section class="bg-zinc-900 p-6 rounded-3xl border border-zinc-800 shadow-xl">
+            <h2 class="text-[11px] font-black text-orange-400 uppercase mb-4 tracking-widest flex items-center gap-2">
+                <span class="w-2 h-2 bg-orange-500 rounded-full"></span> Extract & Split
+            </h2>
+            <input type="file" id="rangeInput" accept="application/pdf" class="block w-full text-xs text-zinc-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-zinc-800 file:text-zinc-300 mb-4">
+            
+            <div class="grid grid-cols-2 gap-4 mb-4">
+                <div>
+                    <label class="text-[9px] text-zinc-500 uppercase font-bold">From Page</label>
+                    <input type="number" id="rangeStart" value="1" class="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-orange-400 text-xs">
+                </div>
+                <div>
+                    <label class="text-[9px] text-zinc-500 uppercase font-bold">To Page</label>
+                    <input type="number" id="rangeEnd" value="1" class="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-orange-400 text-xs">
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-2 gap-4">
+                <button onclick="extractRange()" class="bg-zinc-100 text-zinc-900 font-black py-3 rounded-xl text-[10px] uppercase tracking-widest active:scale-95 transition-all">Extract Range</button>
+                <button onclick="splitPDF()" class="border border-zinc-700 text-zinc-400 font-black py-3 rounded-xl text-[10px] uppercase tracking-widest active:scale-95 transition-all">Split Every Page</button>
+            </div>
+        </section>
+
+        <section class="bg-zinc-900 p-6 rounded-3xl border border-zinc-800 shadow-xl">
+            <h2 class="text-[11px] font-black text-orange-400 uppercase mb-4 tracking-widest flex items-center gap-2">
+                <span class="w-2 h-2 bg-orange-500 rounded-full"></span> Reorder Sequence
+            </h2>
+            <input type="file" id="reorderInput" accept="application/pdf" class="block w-full text-xs text-zinc-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-zinc-800 file:text-zinc-300 mb-4">
+            <div class="mb-4">
+                <label class="text-[9px] text-zinc-500 uppercase font-bold">New Sequence</label>
+                <input type="text" id="sequence" placeholder="e.g. 3, 1, 2" class="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-orange-400 text-xs placeholder:text-zinc-700">
+            </div>
+            <button onclick="reorderPDF()" class="w-full border border-orange-500/50 text-orange-500 font-black py-3 rounded-xl text-[10px] uppercase tracking-widest active:scale-95 transition-all">Apply Custom Order</button>
+        </section>
+
+        <div id="results" class="space-y-3"></div>
+    </div>
+
+    <script>
+        const { PDFDocument } = PDFLib;
+        const status = document.getElementById('status');
+        const results = document.getElementById('results');
+
+        function log(msg) { 
+            status.innerText = msg; 
+            status.classList.add('animate-pulse');
+            setTimeout(() => { status.classList.remove('animate-pulse'); }, 2000);
+        }
+
+        async function createDownload(bytes, name) {
+            const blob = new Blob([bytes], { type: 'application/pdf' });
+            const url = URL.createObjectURL(blob);
+            const div = document.createElement('div');
+            div.className = "bg-zinc-900 p-4 rounded-2xl flex items-center justify-between border border-zinc-800 animate-in fade-in slide-in-from-bottom-2 duration-300 shadow-lg";
+            div.innerHTML = `
+                <span class="text-[10px] font-bold text-zinc-500 truncate pr-4 uppercase tracking-tighter">${name}</span>
+                <a href="${url}" download="${name}" class="bg-orange-600 text-white px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest">Download</a>
+            `;
+            results.prepend(div);
+        }
+
+        // --- MERGE & INSERT LOGIC ---
+        async function mergePDFs() {
+            const files = document.getElementById('mergeInput').files;
+            const insertIdx = parseInt(document.getElementById('insertIdx').value);
+            if (files.length === 0) return log("Select files first");
+            log("Processing...");
+
+            try {
+                const mergedPdf = await PDFDocument.create();
+                
+                if (files.length > 1 && insertIdx > 0) {
+                    // Logic for Insertion: First file is base, rest are inserted at index
+                    const baseBytes = await files[0].arrayBuffer();
+                    const basePdf = await PDFDocument.load(baseBytes);
+                    
+                    for (let i = 1; i < files.length; i++) {
+                        const addBytes = await files[i].arrayBuffer();
+                        const addPdf = await PDFDocument.load(addBytes);
+                        const pages = await basePdf.copyPages(addPdf, addPdf.getPageIndices());
+                        pages.forEach((p, pageIdx) => basePdf.insertPage(insertIdx + pageIdx, p));
+                    }
+                    const bytes = await basePdf.save();
+                    createDownload(bytes, "inserted_doc.pdf");
+                } else {
+                    // Standard Merge
+                    for (const file of files) {
+                        const bytes = await file.arrayBuffer();
+                        const pdf = await PDFDocument.load(bytes);
+                        const pages = await mergedPdf.copyPages(pdf, pdf.getPageIndices());
+                        pages.forEach(p => mergedPdf.addPage(p));
+                    }
+                    const finalBytes = await mergedPdf.save();
+                    createDownload(finalBytes, "merged_output.pdf");
+                }
+                log("Completed");
+            } catch (e) { log("Error processing"); }
+        }
+
+        // --- RANGE LOGIC ---
+        async function extractRange() {
+            const file = document.getElementById('rangeInput').files[0];
+            const start = parseInt(document.getElementById('rangeStart').value);
+            const end = parseInt(document.getElementById('rangeEnd').value);
+            if (!file) return log("Select file first");
+            log("Extracting...");
+            try {
+                const mainPdf = await PDFDocument.load(await file.arrayBuffer());
+                const newPdf = await PDFDocument.create();
+                const indices = Array.from({length: end - start + 1}, (_, i) => start - 1 + i)
+                                     .filter(i => i >= 0 && i < mainPdf.getPageCount());
+                const pages = await newPdf.copyPages(mainPdf, indices);
+                pages.forEach(p => newPdf.addPage(p));
+                createDownload(await newPdf.save(), `range_${start}_to_${end}.pdf`);
+                log("Done");
+            } catch (e) { log("Error"); }
+        }
+
+        // --- SPLIT LOGIC ---
+        async function splitPDF() {
+            const file = document.getElementById('rangeInput').files[0];
+            if (!file) return log("Select file first");
+            log("Splitting...");
+            try {
+                const mainPdf = await PDFDocument.load(await file.arrayBuffer());
+                for (let i = 0; i < mainPdf.getPageCount(); i++) {
+                    const newPdf = await PDFDocument.create();
+                    const [page] = await newPdf.copyPages(mainPdf, [i]);
+                    newPdf.addPage(page);
+                    createDownload(await newPdf.save(), `page_${i+1}_of_${file.name}`);
+                }
+                log("Split complete");
+            } catch (e) { log("Error"); }
+        }
+
+        // --- REORDER LOGIC ---
+        async function reorderPDF() {
+            const file = document.getElementById('reorderInput').files[0];
+            const seq = document.getElementById('sequence').value;
+            if (!file || !seq) return log("Data required");
+            log("Reordering...");
+            try {
+                const mainPdf = await PDFDocument.load(await file.arrayBuffer());
+                const newPdf = await PDFDocument.create();
+                const indices = seq.split(',').map(n => parseInt(n.trim()) - 1)
+                                   .filter(n => n >= 0 && n < mainPdf.getPageCount());
+                const pages = await newPdf.copyPages(mainPdf, indices);
+                pages.forEach(p => newPdf.addPage(p));
+                createDownload(await newPdf.save(), "reordered.pdf");
+                log("Done");
+            } catch (e) { log("Error"); }
+        }
+    </script>
+</body>
+</html>
