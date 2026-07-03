@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Standalone QR Code Generator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <style>
+        /* Ensures the generated image scales properly within its container */
+        #qrcode img, #qrcode canvas {
+            margin: 0 auto;
+            max-width: 100%;
+            height: auto;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen flex items-center justify-center p-4 font-sans text-gray-800">
+
+    <div class="bg-white p-6 rounded-2xl shadow-xl max-w-md w-full border border-gray-100">
+        <h2 class="text-2xl font-bold text-center text-gray-900 mb-2">QR Code Generator</h2>
+        <p class="text-sm text-center text-gray-500 mb-6">Enter a URL or text to instantly generate a QR code.</p>
+        
+        <div class="space-y-4">
+            <div>
+                <label for="text-input" class="block text-sm font-medium text-gray-700 mb-1">URL or Text</label>
+                <input 
+                    type="text" 
+                    id="text-input" 
+                    value="https://vaisakhpwd.github.io/calculators/" 
+                    placeholder="https://example.com" 
+                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition duration-150"
+                >
+            </div>
+            
+            <div>
+                <label for="size-input" class="block text-sm font-medium text-gray-700 mb-1">Size (pixels)</label>
+                <select id="size-input" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition duration-150">
+                    <option value="128">128 x 128</option>
+                    <option value="256" selected>256 x 256</option>
+                    <option value="384">384 x 384</option>
+                    <option value="512">512 x 512</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="mt-8 flex flex-col items-center justify-center min-h-[280px] bg-gray-50 rounded-xl p-4 border border-dashed border-gray-200">
+            <div id="qrcode" class="bg-white p-3 rounded-lg shadow-sm"></div>
+            <p id="placeholder-text" class="text-gray-400 text-sm hidden">Enter text above to generate</p>
+        </div>
+
+        <div class="mt-6 flex gap-3">
+            <button 
+                onclick="generateQR()" 
+                class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 px-4 rounded-lg transition active:scale-[0.98]"
+            >
+                Generate Code
+            </button>
+            <button 
+                id="download-btn" 
+                onclick="downloadQR()" 
+                class="flex-1 bg-gray-800 hover:bg-gray-900 text-white font-medium py-2.5 px-4 rounded-lg transition active:scale-[0.98] hidden"
+            >
+                Download PNG
+            </button>
+        </div>
+    </div>
+
+    <script>
+        let qrContainer = document.getElementById("qrcode");
+        let textInput = document.getElementById("text-input");
+        let sizeInput = document.getElementById("size-input");
+        let downloadBtn = document.getElementById("download-btn");
+        let placeholderText = document.getElementById("placeholder-text");
+
+        function generateQR() {
+            let currentText = textInput.value.trim();
+            let size = parseInt(sizeInput.value);
+
+            // Clear any previous elements inside the container
+            qrContainer.innerHTML = "";
+
+            if (currentText === "") {
+                placeholderText.classList.remove("hidden");
+                downloadBtn.classList.add("hidden");
+                return;
+            }
+
+            placeholderText.classList.add("hidden");
+
+            // Initialize the QRCode object
+            new QRCode(qrContainer, {
+                text: currentText,
+                width: size,
+                height: size,
+                colorDark: "#000000",
+                colorLight: "#ffffff",
+                correctLevel: QRCode.CorrectLevel.H
+            });
+
+            // Brief fallback timeout to ensure img tags are injected safely before exposing the exporter
+            setTimeout(() => {
+                downloadBtn.classList.remove("hidden");
+            }, 150);
+        }
+
+        function downloadQR() {
+            const qrImg = qrContainer.querySelector("img");
+            const qrCanvas = qrContainer.querySelector("canvas");
+
+            let downloadLink = document.createElement("a");
+            downloadLink.download = "qrcode.png";
+
+            if (qrImg && qrImg.src && !qrImg.src.startsWith('data:image/svg+xml')) {
+                downloadLink.href = qrImg.src;
+                downloadLink.click();
+            } else if (qrCanvas) {
+                downloadLink.href = qrCanvas.toDataURL("image/png");
+                downloadLink.click();
+            }
+        }
+
+        // Run automatically on load to render the default link layout immediately
+        window.onload = function() {
+            generateQR();
+        };
+
+        // Clear view instantly if input value gets removed entirely
+        textInput.addEventListener("input", function() {
+            if(textInput.value.trim() === "") {
+                qrContainer.innerHTML = "";
+                placeholderText.classList.remove("hidden");
+                downloadBtn.classList.add("hidden");
+            }
+        });
+    </script>
+</body>
+</html>
