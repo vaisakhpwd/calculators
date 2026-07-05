@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Offline Video Suite (Fixed Combiner)</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+            background-color: #121212;
+            color: #e0e0e0;
+            max-width: 900px;
+            margin: 40px auto;
+            padding: 20px;
+        }
+        .container {
+            background-color: #1e1e1e;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        }
+        h2, h3 { text-align: center; margin-top: 0; }
+        .section {
+            background: #252525;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 25px;
+            border: 1px solid #333;
+        }
+        .file-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: #2d2d2d;
+            padding: 10px 15px;
+            margin: 8px 0;
+            border-radius: 6px;
+            border-left: 4px solid #00adb5;
+        }
+        .file-item span { font-size: 0.9rem; font-weight: 500; }
+        .file-item button {
+            background: #ff3344;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            font-size: 0.8rem;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .file-item button:hover { background: #ff5566; }
+        video { width: 100%; max-height: 350px; border-radius: 8px; background: #000; margin-top: 10px; }
+        .controls { display: flex; justify-content: center; margin: 15px 0; gap: 20px; flex-wrap: wrap; }
+        .input-group { display: flex; flex-direction: column; align-items: center; }
+        .checkbox-group { display: flex; align-items: center; gap: 8px; margin: 15px 0; justify-content: center; }
+        label { font-size: 0.85rem; color: #aaa; margin-bottom: 5px; }
+        input[type="number"] { background: #333; border: 1px solid #444; color: #fff; padding: 6px; border-radius: 4px; width: 80px; text-align: center; }
+        input[type="file"] { margin: 10px 0; color: #aaa; }
+        button { background-color: #00adb5; color: white; border: none; padding: 10px 20px; font-size: 0.95rem; border-radius: 6px; cursor: pointer; font-weight: bold; transition: background 0.2s; }
+        button:hover { background-color: #00f5ff; }
+        button:disabled { background-color: #444; color: #888; cursor: not-allowed; }
+        .action-btn { background-color: #28a745; width: 100%; padding: 14px; font-size: 1.1rem; margin-top: 15px; }
+        .action-btn:hover { background-color: #218838; }
+        #status { margin-top: 15px; text-align: center; font-style: italic; color: #00adb5; font-weight: bold; }
+        #canvas-render-preview { display: none; background: #000; max-width: 100%; margin-top: 10px; border-radius: 8px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Offline Video Suite</h2>
+    
+    <div class="section">
+        <h3>1. Trim Individual Video</h3>
+        <input type="file" id="trim-upload" accept="video/*">
+        <div id="trim-preview-container" style="display:none;">
+            <video id="trim-preview" controls muted></video>
+            <div class="controls">
+                <div class="input-group">
+                    <label for="start-time">Start (sec)</label>
+                    <input type="number" id="start-time" min="0" value="0" step="0.1">
+                </div>
+                <div class="input-group">
+                    <label for="end-time">End (sec)</label>
+                    <input type="number" id="end-time" min="0" value="5" step="0.1">
+                </div>
+            </div>
+            <button id="trim-btn">Trim & Save to Computer</button>
+        </div>
+    </div>
+
+    <div class="section">
+        <h3>2. Combine Videos & Manage Audio</h3>
+        <p style="font-size: 0.85rem; color: #aaa; text-align:center; margin-top:-5px;">
+            Add multiple clips to merge them into a single file.
+        </p>
+        
+        <input type="file" id="combiner-upload" accept="video/*" multiple>
+        <div id="file-list"></div>
+        
+        <div class="checkbox-group">
+            <input type="checkbox" id="keep-orig-audio" checked>
+            <label for="keep-orig-audio">Keep original video audio tracks</label>
+        </div>
+        
+        <div class="input-group" style="margin-top: 10px;">
+            <label for="bg-audio-upload"><strong>Add New Background Audio Track (Optional):</strong></label>
+            <input type="file" id="bg-audio-upload" accept="audio/*">
+        </div>
+
+        <video id="combiner-player" style="display:none;" muted playsinline></video>
+        <canvas id="canvas-render-preview" width="1280" height="720"></canvas>
+        
+        <button id="combine-btn" class="action-btn" disabled>Combine Clips & Download</button>
+    </div>
+
+    <div id="status">Ready. All processing happens locally in your browser tab.</div>
+</div>
+
+<script>
+    const statusDiv = document.getElementById('status');
+    function updateStatus(msg) { statusDiv.innerText = msg; }
+
+    // ==========================================
+    // MODULE 1: SINGLE VIDEO TRIMMER
+    // ==========================================
+    const trimUpload = document.getElementById('trim-upload');
+    const trimPreviewContainer = document.getElementById('trim-preview-container');
+    const trimPreview = document.getElementById('trim-preview');
+    const startTimeInput = document.getElementById('start-time');
+    const endTimeInput = document.getElementById('end-time');
+    const trimBtn = document.getElementById('trim-btn');
+    let trimFile;
+
+    trimUpload.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        trimFile = file;
+        trimPreview.src = URL.createObjectURL(file);
+        trimPreviewContainer.style.display = 'block';
+        trimPreview.onloadedmetadata = () => {
+            startTimeInput.value = 0;
+            endTimeInput.value = Math.min(10, Math.floor(trimPreview.duration));
+        };
+    });
+
+    trimBtn.addEventListener('click', () => {
+        const start = parseFloat(startTimeInput.value);
+        const end = parseFloat(endTimeInput.value);
+        if (start >= end) return alert("Start time must be less than end time.");
+
+        trimBtn.disabled = true;
+        updateStatus("Trimming video file...");
+
+        trimPreview.currentTime = start;
+        const stream = trimPreview.captureStream ? trimPreview.captureStream() : trimPreview.mozCaptureStream();
+        const mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9,opus' });
+        const chunks = [];
+
+        mediaRecorder.ondataavailable = e => chunks.push(e.data);
+        mediaRecorder.onstop = () => {
+            trimPreview.pause();
+            const blob = new Blob(chunks, { type: 'video/webm' });
+            triggerDownload(blob, `trimmed_${trimFile.name.split('.')[0]}.webm`);
+            trimBtn.disabled = false;
+            updateStatus("Trim complete!");
+        };
+
+        trimPreview.onseeked = () => {
+            trimPreview.onseeked = null;
+            mediaRecorder.start();
+            trimPreview.play();
+            const checker = setInterval(() => {
+                if (trimPreview.currentTime >= end || trimPreview.ended) {
+                    clearInterval(checker);
+                    mediaRecorder.stop();
+                }
+            }, 40);
+        };
+    });
+
+    // ==========================================
+    // MODULE 2: FIXED VIDEO COMBINER (CANVAS LAYER)
+    // ==========================================
+    const combinerUpload = document.getElementById('combiner-upload');
+    const fileListDiv = document.getElementById('file-list');
+    const bgAudioUpload = document.getElementById('bg-audio-upload');
+    const keepOrigAudioCb = document.getElementById('keep-orig-audio');
+    const combinerPlayer = document.getElementById('combiner-player');
+    const renderCanvas = document.getElementById('canvas-render-preview');
+    const canvasCtx = renderCanvas.getContext('2d');
+    const combineBtn = document.getElementById('combine-btn');
+
+    let videoQueue = []; 
+    let bgAudioFile = null;
+    let canvasAnimationLoop;
+
+    combinerUpload.addEventListener('change', (e) => {
+        for (let file of e.target.files) {
+            videoQueue.push({ file: file, url: URL.createObjectURL(file) });
+        }
+        renderQueue();
+    });
+
+    bgAudioUpload.addEventListener('change', (e) => {
+        if (e.target.files[0]) bgAudioFile = e.target.files[0];
+    });
+
+    function renderQueue() {
+        fileListDiv.innerHTML = '';
+        videoQueue.forEach((item, index) => {
+            const row = document.createElement('div');
+            row.className = 'file-item';
+            row.innerHTML = `<span>🎬 [Clip ${index + 1}] ${item.file.name}</span>`;
+            const deleteBtn = document.createElement('button');
+            deleteBtn.innerText = 'Remove';
+            deleteBtn.onclick = () => {
+                videoQueue.splice(index, 1);
+                renderQueue();
+            };
+            row.appendChild(deleteBtn);
+            fileListDiv.appendChild(row);
+        });
+        combineBtn.disabled = videoQueue.length < 2;
+    }
+
+    combineBtn.addEventListener('click', async () => {
+        combineBtn.disabled = true;
+        renderCanvas.style.display = 'block';
+        updateStatus("Stitching tracks via processing pipeline...");
+
+        let currentClipIndex = 0;
+        const chunks = [];
+        
+        // --- Setup Unified Web Audio Router ---
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        const audioCtx = new AudioContext();
+        const destinationStream = audioCtx.createMediaStreamDestination();
+
+        // 1. Add background music if selected
+        let bgAudioEl = null;
+        if (bgAudioFile) {
+            bgAudioEl = new Audio(URL.createObjectURL(bgAudioFile));
+            bgAudioEl.loop = true;
+            const bgAudioNode = audioCtx.createMediaElementSource(bgAudioEl);
+            bgAudioNode.connect(destinationStream);
+            bgAudioEl.play();
+        }
+
+        // 2. Track internal clip audio native source stream routing
+        if (keepOrigAudioCb.checked) {
+            const playerAudioNode = audioCtx.createMediaElementSource(combinerPlayer);
+            playerAudioNode.connect(destinationStream);
+        }
+
+        // --- Setup Fixed Canvas Frame Grabber ---
+        // Capture frame track natively at a constant 30 FPS frame rate
+        const canvasVideoStream = renderCanvas.captureStream(30); 
+        
+        const combinedTracks = [
+            ...canvasVideoStream.getVideoTracks(),
+            ...destinationStream.stream.getAudioTracks()
+        ];
+        
+        const masterStream = new MediaStream(combinedTracks);
+        const recorder = new MediaRecorder(masterStream, { mimeType: 'video/webm;codecs=vp9,opus' });
+
+        recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+        
+        recorder.onstop = () => {
+            cancelAnimationFrame(canvasAnimationLoop);
+            if (bgAudioEl) bgAudioEl.pause();
+            
+            updateStatus("Compiling output video file...");
+            const finalBlob = new Blob(chunks, { type: 'video/webm' });
+            triggerDownload(finalBlob, "combined_video.webm");
+            
+            updateStatus("Finished! File downloaded successfully.");
+            combineBtn.disabled = false;
+            renderCanvas.style.display = 'none';
+        };
+
+        // Real-time Canvas Frame Painter Loop
+        function drawFrame() {
+            if (!combinerPlayer.paused && !combinerPlayer.ended) {
+                // Clear and paint frame scaled smoothly to uniform 1280x720 output dimensions
+                canvasCtx.fillStyle = '#000000';
+                canvasCtx.fillRect(0, 0, renderCanvas.width, renderCanvas.height);
+                
+                // Keep proportional aspect ratio with letterboxing if clips vary
+                const hRatio = renderCanvas.width / combinerPlayer.videoWidth;
+                const vRatio = renderCanvas.height / combinerPlayer.videoHeight;
+                const ratio  = Math.min(hRatio, vRatio);
+                const shiftX = (renderCanvas.width - combinerPlayer.videoWidth * ratio) / 2;
+                const shiftY = (renderCanvas.height - combinerPlayer.videoHeight * ratio) / 2;
+                
+                canvasCtx.drawImage(combinerPlayer, 0, 0, combinerPlayer.videoWidth, combinerPlayer.videoHeight,
+                                                   shiftX, shiftY, combinerPlayer.videoWidth * ratio, combinerPlayer.videoHeight * ratio);
+            }
+            canvasAnimationLoop = requestAnimationFrame(drawFrame);
+        }
+
+        async function playNextClip() {
+            if (currentClipIndex >= videoQueue.length) {
+                recorder.stop();
+                return;
+            }
+
+            updateStatus(`Merging clip ${currentClipIndex + 1} of ${videoQueue.length}...`);
+            combinerPlayer.src = videoQueue[currentClipIndex].url;
+            combinerPlayer.load();
+
+            combinerPlayer.onloadedmetadata = () => {
+                combinerPlayer.play();
+            };
+
+            combinerPlayer.onended = () => {
+                currentClipIndex++;
+                playNextClip();
+            };
+        }
+
+        // Initialize master processing engine
+        recorder.start();
+        await audioCtx.resume();
+        drawFrame();
+        playNextClip();
+    });
+
+    function triggerDownload(blob, filename) {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+    }
+</script>
+
+</body>
+</html>
